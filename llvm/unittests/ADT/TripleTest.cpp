@@ -299,6 +299,18 @@ TEST(TripleTest, ParsedIDs) {
   EXPECT_EQ(Triple::WASI, T.getOS());
   EXPECT_EQ(Triple::UnknownEnvironment, T.getEnvironment());
 
+  T = Triple("agc-unknown-unknown");
+  EXPECT_EQ(Triple::agc, T.getArch());
+  EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
+  EXPECT_EQ(Triple::UnknownOS, T.getOS());
+  EXPECT_EQ(Triple::UnknownEnvironment, T.getEnvironment());
+
+  T = Triple("agc");
+  EXPECT_EQ(Triple::agc, T.getArch());
+  EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
+  EXPECT_EQ(Triple::UnknownOS, T.getOS());
+  EXPECT_EQ(Triple::UnknownEnvironment, T.getEnvironment());
+
   T = Triple("avr-unknown-unknown");
   EXPECT_EQ(Triple::avr, T.getArch());
   EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
@@ -1030,6 +1042,11 @@ TEST(TripleTest, BitWidthPredicates) {
   EXPECT_FALSE(T.isArch32Bit());
   EXPECT_TRUE(T.isArch64Bit());
 
+  T.setArch(Triple::agc);
+  EXPECT_TRUE(T.isArch16Bit());
+  EXPECT_FALSE(T.isArch32Bit());
+  EXPECT_FALSE(T.isArch64Bit());
+
   T.setArch(Triple::avr);
   EXPECT_TRUE(T.isArch16Bit());
   EXPECT_FALSE(T.isArch32Bit());
@@ -1287,6 +1304,11 @@ TEST(TripleTest, EndianArchVariants) {
   T.setArch(Triple::aarch64);
   EXPECT_EQ(Triple::aarch64_be, T.getBigEndianArchVariant().getArch());
   EXPECT_EQ(Triple::aarch64, T.getLittleEndianArchVariant().getArch());
+
+  T.setArch(Triple::agc);
+  EXPECT_EQ(Triple::agc, T.getBigEndianArchVariant().getArch());
+  EXPECT_EQ(Triple::UnknownArch, T.getLittleEndianArchVariant().getArch());
+  EXPECT_FALSE(T.isLittleEndian());
 
   T.setArch(Triple::armeb);
   EXPECT_EQ(Triple::armeb, T.getBigEndianArchVariant().getArch());

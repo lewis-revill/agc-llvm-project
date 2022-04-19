@@ -51,6 +51,7 @@ public:
     aarch64,        // AArch64 (little endian): aarch64
     aarch64_be,     // AArch64 (big endian): aarch64_be
     aarch64_32,     // AArch64 (little endian) ILP32: aarch64_32
+    agc,            // AGC: Apollo Guidance Computer
     arc,            // ARC: Synopsys ARC
     avr,            // AVR: Atmel AVR microcontroller
     bpfel,          // eBPF or extended BPF or 64-bit BPF (little endian)
@@ -812,6 +813,11 @@ public:
                    getEnvironment() == Triple::GNUILP32
                ? PointerWidth == 32
                : PointerWidth == 64;
+  }
+
+  /// Tests whether the target is AGC.
+  bool isAGC() const {
+    return getArch() == Triple::agc;
   }
 
   /// Tests whether the target is LoongArch (32- and 64-bit).

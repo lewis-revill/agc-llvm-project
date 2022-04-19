@@ -27,6 +27,7 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
   case aarch64:        return "aarch64";
   case aarch64_32:     return "aarch64_32";
   case aarch64_be:     return "aarch64_be";
+  case agc:            return "agc";
   case amdgcn:         return "amdgcn";
   case amdil64:        return "amdil64";
   case amdil:          return "amdil";
@@ -96,6 +97,8 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
   case aarch64:
   case aarch64_be:
   case aarch64_32:  return "aarch64";
+
+  case agc:         return "agc";
 
   case arc:         return "arc";
 
@@ -310,6 +313,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
     .Case("aarch64", aarch64)
     .Case("aarch64_be", aarch64_be)
     .Case("aarch64_32", aarch64_32)
+    .Case("agc", agc)
     .Case("arc", arc)
     .Case("arm64", aarch64) // "arm64" is an alias for "aarch64"
     .Case("arm64_32", aarch64_32)
@@ -454,6 +458,7 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .Case("aarch64", Triple::aarch64)
     .Case("aarch64_be", Triple::aarch64_be)
     .Case("aarch64_32", Triple::aarch64_32)
+    .Case("agc", Triple::agc)
     .Case("arc", Triple::arc)
     .Case("arm64", Triple::aarch64)
     .Case("arm64_32", Triple::aarch64_32)
@@ -768,6 +773,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
     return Triple::ELF;
 
   case Triple::aarch64_be:
+  case Triple::agc:
   case Triple::amdgcn:
   case Triple::amdil64:
   case Triple::amdil:
@@ -1351,6 +1357,7 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::UnknownArch:
     return 0;
 
+  case llvm::Triple::agc:
   case llvm::Triple::avr:
   case llvm::Triple::msp430:
     return 16;
@@ -1435,6 +1442,7 @@ Triple Triple::get32BitArchVariant() const {
   Triple T(*this);
   switch (getArch()) {
   case Triple::UnknownArch:
+  case Triple::agc:
   case Triple::amdgcn:
   case Triple::avr:
   case Triple::bpfeb:
@@ -1512,6 +1520,7 @@ Triple Triple::get64BitArchVariant() const {
   Triple T(*this);
   switch (getArch()) {
   case Triple::UnknownArch:
+  case Triple::agc:
   case Triple::arc:
   case Triple::avr:
   case Triple::csky:
@@ -1662,6 +1671,7 @@ Triple Triple::getLittleEndianArchVariant() const {
   case Triple::sparcv9:
   case Triple::systemz:
   case Triple::m68k:
+  case Triple::agc:
 
   // ARM is intentionally unsupported here, changing the architecture would
   // drop any arch suffixes.
