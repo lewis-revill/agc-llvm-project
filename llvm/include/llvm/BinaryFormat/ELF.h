@@ -320,6 +320,8 @@ enum {
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
   EM_LOONGARCH = 258,     // LoongArch
+
+  EM_AGC = 1969,          // Apollo Guidance Computer
 };
 
 // Object file classes.
@@ -427,6 +429,11 @@ enum {
 enum {
   // Symbol may follow different calling convention than base PCS.
   STO_AARCH64_VARIANT_PCS = 0x80
+};
+
+// ELF Relocation types for AGC
+enum {
+#include "ELFRelocs/AGC.def"
 };
 
 // ARM Specific e_flags
