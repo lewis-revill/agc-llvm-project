@@ -151,6 +151,12 @@ Hexagon
 
 * `Hexagon Programmer's Reference Manuals and Hexagon ABI Specification (registration required, free sign-up) <https://developer.qualcomm.com/software/hexagon-dsp-sdk/tools>`_
 
+AGC
+---
+
+* `Apollo Guidance Computer basic training manual <https://www.ibiblio.org/apollo/NARA-SW/E-2052.pdf>`_
+* `Apollo Guidance Computer unofficial documentation <https://www.ibiblio.org/apollo/assembly_language_manual.html>`_
+
 Other relevant lists
 --------------------
 
