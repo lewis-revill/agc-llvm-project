@@ -29,6 +29,13 @@ def mem12 : Operand<i16> {
   let DecoderMethod = "decodeMem12Operand";
 }
 
+// A 10 bit address into general purpose memory, encompassing only erasable
+// memory locations.
+def mem10 : Operand<i16> {
+  let ParserMatchClass = AGCAsmOperand<"Mem10">;
+  let DecoderMethod = "decodeMem10Operand";
+}
+
 // A 9 bit address into IO channel memory.
 def io9 : Operand<i16> {
   let ParserMatchClass = AGCAsmOperand<"IO9">;
@@ -45,8 +52,20 @@ class ALUReadInst<bits<3> opcode, dag outs, dag ins, string opcodestr,
                   list<dag> pattern = []>
     : AGCInst12<opcode, outs, ins, opcodestr, pattern> {
   let hasSideEffects = 0;
+  let mayLoad = 1;
+  let mayStore = 0;
+}
+
+// Base instruction for defining instructions which read in from a general
+// purpose memory location - pseudo (register only) version.
+class ALUReadPseudo<dag outs, dag ins, string opcodestr, list<dag> pattern = []>
+    : Pseudo<outs, ins, opcodestr, "$k", pattern> {
+  let hasSideEffects = 0;
   let mayLoad = 0;
   let mayStore = 0;
+  let Size = 2;
+  let isCodeGenOnly = 0;
+  let isAsmParserOnly = 1;
 }
 
 // Base instruction for defining instructions which write out to a general
@@ -56,7 +75,20 @@ class ALUWriteInst<bits<5> opcode, dag outs, dag ins, string opcodestr,
     : AGCInst10<opcode, outs, ins, opcodestr, pattern> {
   let hasSideEffects = 0;
   let mayLoad = 0;
+  let mayStore = 1;
+}
+
+// Base instruction for defining instructions which write out to a general
+// purpose memory location - pseudo (register only) version.
+class ALUWritePseudo<dag outs, dag ins, string opcodestr,
+                     list<dag> pattern = []>
+    : Pseudo<outs, ins, opcodestr, "$k", pattern> {
+  let hasSideEffects = 0;
+  let mayLoad = 0;
   let mayStore = 0;
+  let Size = 2;
+  let isCodeGenOnly = 0;
+  let isAsmParserOnly = 1;
 }
 
 // Base instruction for defining instructions which transfer control within the
@@ -146,42 +178,69 @@ def INDEX : AGCInst10<0b10100, (outs GPR:$k_wb), (ins GPR:$k), "index">;
 // writes back the original value of the memory location, so memory locations
 // which edit their contents are updated. Note that this occurs even though the
 // operand is not necessarily erasable.
-let Constraints = "$k = $k_wb", isAdd = 1 in
-def AD : ALUReadInst<0b110, (outs A:$a_dst, GPR:$k_wb),
-                     (ins A:$a, GPR:$k), "ad">;
+let isAdd = 1 in {
+let mayStore = 1 in
+def AD : ALUReadInst<0b110, (outs A:$a_dst), (ins mem12:$k_wb, A:$a, mem12:$k),
+                     "ad">;
+
+let Constraints = "$k = $k_wb" in
+def PseudoAD : ALUReadPseudo<(outs A:$a_dst, GPR:$k_wb), (ins A:$a, GPR:$k),
+                             "ad">;
+} // AD
 
 // Double precision add value of accumulator to general purpose memory location.
 // This instruction writes the sign of the output to the accumulator, and writes
 // zero to the lower accumulator.
-let Constraints = "$k = $k_dst", isAdd = 1 in
-def DAS : ALUWriteInst<0b01000, (outs GPRD:$k_dst, AL:$al_wb),
-                       (ins GPRD:$k, AL:$al), "das">;
+let isAdd = 1 in {
+let mayLoad = 1 in
+def DAS : ALUWriteInst<0b01000, (outs AL:$al_wb),
+                       (ins mem10:$k_dst, mem10:$k, AL:$al), "das">;
+
+let Constraints = "$k = $k_dst" in
+def PseudoDAS : ALUWritePseudo<(outs AL:$al_wb, GPRD:$k_dst),
+                               (ins GPRD:$k, AL:$al), "das">;
+} // DAS
 
 // Subtract value of general purpose memory location from accumulator. This
 // instruction writes back the original value of the memory location, so memory
 // locations which edit their contents are updated.
-let Constraints = "$k = $k_wb", isExtracode = 1,
-DecoderNamespace = "Extracode" in
-def SU : ALUWriteInst<0b11000, (outs A:$a_dst, GPR:$k_wb),
-                      (ins A:$a, GPR:$k), "su">;
+let isExtracode = 1, DecoderNamespace = "Extracode" in {
+let mayLoad = 1 in
+def SU : ALUWriteInst<0b11000, (outs A:$a_dst),
+                      (ins mem10:$k_wb, A:$a, mem10:$k), "su">;
+
+let Constraints = "$k = $k_wb" in
+def PseudoSU : ALUWritePseudo<(outs A:$a_dst, GPR:$k_wb), (ins A:$a, GPR:$k),
+                              "su">;
+} // SU
 
 // Modular subtract value of general purpose memory location from accumulator.
 // This instruction writes back the original value of the memory location, so
 // memory locations which edit their contents are updated.
-let Constraints = "$k = $k_wb", isExtracode = 1,
-DecoderNamespace = "Extracode" in
-def MSU : ALUWriteInst<0b01000, (outs A:$a_dst, GPR:$k_wb),
-                       (ins A:$a, GPR:$k), "msu">;
+let isExtracode = 1, DecoderNamespace = "Extracode" in {
+let mayLoad = 1 in
+def MSU : ALUWriteInst<0b01000, (outs A:$a_dst),
+                       (ins mem10:$k_wb, A:$a, mem10:$k), "msu">;
+
+let Constraints = "$k = $k_wb" in
+def PseudoMSU : ALUWritePseudo<(outs A:$a_dst, GPR:$k_wb), (ins A:$a, GPR:$k),
+                               "msu">;
+} // MSU
 
 // And value of general purpose memory location with value of accumulator into
 // accumulator.
-def MASK : ALUReadInst<0b111, (outs A:$a_dst), (ins A:$a, GPR:$k), "mask">;
+def MASK : ALUReadInst<0b111, (outs A:$a_dst), (ins A:$a, mem12:$k), "mask">;
+
+def PseudoMASK : ALUReadPseudo<(outs A:$a_dst), (ins A:$a, GPR:$k), "mask">;
 
 // Douple precision multiply value of general purpose memory location with
 // accumulator. This instruction stores the result of the multiplication in both
 // the accumulator and the lower accumulator.
-let isExtracode = 1, DecoderNamespace = "Extracode" in
-def MP : ALUReadInst<0b111, (outs AL:$a_dst), (ins A:$a, GPR:$k), "mp">;
+let isExtracode = 1, DecoderNamespace = "Extracode" in {
+def MP : ALUReadInst<0b111, (outs AL:$a_dst), (ins A:$a, mem12:$k), "mp">;
+
+def PseudoMP : ALUReadPseudo<(outs AL:$a_dst), (ins A:$a, GPR:$k), "mp">;
+} // MP
 
 // Double precision divide value of the accumulator and lower accumulator pair
 // by general purpose memory location. This instruction stores the result of the
@@ -191,104 +250,158 @@ def MP : ALUReadInst<0b111, (outs AL:$a_dst), (ins A:$a, GPR:$k), "mp">;
 // divisor is larger than the value of the accumulator and lower accumulator
 // pair then the result is completely undefined. Note that even though the
 // operand is erasable, no editing or write back occurs.
-let isExtracode = 1, DecoderNamespace = "Extracode" in
+let isExtracode = 1, DecoderNamespace = "Extracode" in {
+let mayLoad = 1, mayStore = 0 in
 def DV : ALUWriteInst<0b00100, (outs A:$a_dst, L:$l_dst),
-                      (ins AL:$a, GPRD:$k), "dv">;
+                      (ins AL:$a, mem10:$k), "dv">;
+
+def PseudoDV : ALUWritePseudo<(outs A:$a_dst, L:$l_dst), (ins AL:$a, GPRD:$k),
+                              "dv">;
+} // DV
 
 
 
 // Increment general purpose memory location by 1.
+let mayLoad = 1 in
+def INCR : ALUWriteInst<0b01010, (outs), (ins mem10:$k_dst, mem10:$k), "incr">;
+
 let Constraints = "$k = $k_dst" in
-def INCR : ALUWriteInst<0b01010, (outs GPR:$k_dst), (ins GPR:$k), "incr">;
+def PseudoINCR : ALUWritePseudo<(outs GPR:$k_dst), (ins GPR:$k), "incr">;
 
 // Add value of accumulator to general purpose memory location.
+let mayLoad = 1 in
+def ADS : ALUWriteInst<0b01011, (outs), (ins mem10:$k_dst, mem10:$k, A:$a),
+                       "ads">;
+
 let Constraints = "$k = $k_dst" in
-def ADS : ALUWriteInst<0b01011, (outs GPR:$k_dst), (ins GPR:$k, A:$a), "ads">;
+def PseudoADS : ALUWritePseudo<(outs GPR:$k_dst), (ins GPR:$k, A:$a), "ads">;
 
 // 'Diminish' general purpose memory location by 1. This instruction either adds
 // 1 to a negative value or subtracts 1 from a positive value. If the value is
 // zero, it is unchanged.
-let Constraints = "$k = $k_dst", isExtracode = 1,
-DecoderNamespace = "Extracode" in
-def DIM : ALUWriteInst<0b01011, (outs GPR:$k_dst), (ins GPR:$k), "dim">;
+let isExtracode = 1, DecoderNamespace = "Extracode" in {
+let mayLoad = 1 in
+def DIM : ALUWriteInst<0b01011, (outs), (ins mem10:$k_dst, mem10:$k), "dim">;
+
+let Constraints = "$k = $k_dst" in
+def PseudoDIM : ALUWritePseudo<(outs GPR:$k_dst), (ins GPR:$k), "dim">;
+} // DIM
 
 // 'Augment' general purpose memory location by 1. This instruction either adds
 // 1 to a positive value or subtracts 1 from a negative value. If the value is
 // zero, it is augmented according to its sign.
-let Constraints = "$k = $k_dst", isExtracode = 1,
-DecoderNamespace = "Extracode" in
-def AUG : ALUWriteInst<0b01010, (outs GPR:$k_dst), (ins GPR:$k), "aug">;
+let isExtracode = 1, DecoderNamespace = "Extracode" in {
+let mayLoad = 1 in
+def AUG : ALUWriteInst<0b01010, (outs), (ins mem10:$k_dst, mem10:$k), "aug">;
 
+let Constraints = "$k = $k_dst" in
+def PseudoAUG : ALUWritePseudo<(outs GPR:$k_dst), (ins GPR:$k), "aug">;
+} // AUG
 
 // Copy value of general purpose memory location to accumulator. This
 // instruction writes back the original value of the memory location, so memory
 // locations which edit their contents are updated. Note that this occurs even
 // though the operand is not necessarily erasable.
+let mayStore = 1 in
+def CA : ALUReadInst<0b011, (outs A:$a_dst), (ins mem12:$k_wb, mem12:$k), "ca">;
+
 let Constraints = "$k = $k_wb" in
-def CA : ALUReadInst<0b011, (outs A:$a_dst, GPR:$k_wb), (ins GPR:$k), "ca">;
+def PseudoCA : ALUReadPseudo<(outs A:$a_dst, GPR:$k_wb), (ins GPR:$k), "ca">;
 
 // Double precision copy general purpose memory location pair to accumulator and
 // lower accumulator pair. This instruction writes back the original value of
 // the memory location, so memory locations which edit their contents are
 // updated. Note that this occurs even though the operand is not necessarily
 // erasable.
-let Constraints = "$k = $k_wb", isExtracode = 1,
-DecoderNamespace = "Extracode" in
-def DCA : ALUReadInst<0b011, (outs AL:$a_dst, GPRD:$k_wb), (ins GPRD:$k),
+let isExtracode = 1, DecoderNamespace = "Extracode" in {
+let mayStore = 1 in
+def DCA : ALUReadInst<0b011, (outs AL:$a_dst), (ins mem12:$k_wb, mem12:$k),
                       "dca">;
+
+let Constraints = "$k = $k_wb" in
+def PseudoDCA : ALUReadPseudo<(outs AL:$a_dst, GPRD:$k_wb), (ins GPRD:$k),
+                              "dca">;
+} // DCA
 
 // Copy inverted value of general purpose memory location to accumulator. This
 // instruction writes back the original value of the memory location, so memory
 // locations which edit their contents are updated. Note that this occurs even
 // though the operand is not necessarily erasable.
+let mayStore = 1 in
+def CS : ALUReadInst<0b100, (outs A:$a_dst), (ins mem12:$k_wb, mem12:$k), "cs">;
+
 let Constraints = "$k = $k_wb" in
-def CS : ALUReadInst<0b100, (outs A:$a_dst, GPR:$k_wb), (ins GPR:$k), "cs">;
+def PseudoCS : ALUReadPseudo<(outs A:$a_dst, GPR:$k_wb), (ins GPR:$k), "cs">;
 
 // Double precision copy inverted value of general purpose memory location pair
 // to accumulator pair. This instruction writes back the original value of the
 // memory location, so memory locations which edit their contents are updated.
 // Note that this occurs even though the operand is not necessarily erasable.
-let Constraints = "$k = $k_wb", isExtracode = 1,
-DecoderNamespace = "Extracode" in
-def DCS : ALUReadInst<0b100, (outs AL:$a_dst, GPRD:$k_wb), (ins GPRD:$k),
+let isExtracode = 1, DecoderNamespace = "Extracode" in {
+let mayStore = 1 in
+def DCS : ALUReadInst<0b100, (outs AL:$a_dst), (ins mem12:$k_wb, mem12:$k),
                       "dcs">;
+
+let Constraints = "$k = $k_wb" in
+def PseudoDCS : ALUReadPseudo<(outs AL:$a_dst, GPRD:$k_wb), (ins GPRD:$k),
+                              "dcs">;
+} // DCS
 
 
 // Transfer value of accumulator to general purpose memory location. This
 // instruction corrects overflow of the accumulator value if the destination is
 // not also a 16 bit memory location. If the accumulator contained overflow, the
 // accumulator is set to +1 or -1 depending on the sign of the overflow.
-def TS : ALUWriteInst<0b10110, (outs GPR:$k, A:$a_wb), (ins A:$a), "ts">;
+def TS : ALUWriteInst<0b10110, (outs A:$a_wb), (ins mem10:$k, A:$a), "ts">;
+
+def PseudoTS : ALUWritePseudo<(outs A:$a_wb, GPR:$k), (ins A:$a), "ts">;
 
 // Exchange accumulator and general purpose memory location. This instruction
 // corrects overflow of the accumulator value if the destination is not also a
 // 16 bit memory location.
+let mayLoad = 1 in
+def XCH : ALUWriteInst<0b10111, (outs A:$a_dst),
+                       (ins mem10:$k_dst, A:$a, mem10:$k), "xch">;
+
 let Constraints = "$k = $k_dst" in
-def XCH : ALUWriteInst<0b10111, (outs A:$a_dst, GPR:$k_dst),
-                       (ins A:$a, GPR:$k), "xch">;
+def PseudoXCH : ALUWritePseudo<(outs A:$a_dst, GPR:$k_dst), (ins A:$a, GPR:$k),
+                               "xch">;
 
 // Exchange lower accumulator and general purpose memory location. This
 // instruction corrects overflow of the destination value if it is a 16 bit
 // memory location.
+let mayLoad = 1 in
+def LXCH : ALUWriteInst<0b01001, (outs L:$l_dst),
+                        (ins mem10:$k_dst, L:$l, mem10:$k), "lxch">;
+
 let Constraints = "$k = $k_dst" in
-def LXCH : ALUWriteInst<0b01001, (outs L:$l_dst, GPR:$k_dst),
-                        (ins L:$l, GPR:$k), "lxch">;
+def PseudoLXCH : ALUWritePseudo<(outs L:$l_dst, GPR:$k_dst), (ins L:$l, GPR:$k),
+                                "lxch">;
 
 // Exchange return address and general purpose memory location. This instruction
 // corrects overflow of the return address value if the destination is not also
 // a 16 bit memory location.
-let Constraints = "$k = $k_dst", isExtracode = 1,
-DecoderNamespace = "Extracode" in
-def QXCH : ALUWriteInst<0b01001, (outs Q:$q_dst, GPR:$k_dst),
-                        (ins Q:$q, GPR:$k), "qxch">;
+let isExtracode = 1, DecoderNamespace = "Extracode" in {
+let mayLoad = 1 in
+def QXCH : ALUWriteInst<0b01001, (outs Q:$q_dst),
+                        (ins  mem10:$k_dst, Q:$q, mem10:$k), "qxch">;
+
+let Constraints = "$k = $k_dst" in
+def PseudoQXCH : ALUWritePseudo<(outs Q:$q_dst, GPR:$k_dst), (ins Q:$q, GPR:$k),
+                                "qxch">;
+} // QXCH
 
 // Double precision exchange accumulator and lower accumulator pair and general
 // purpose memory location pair. This instruction corrects only the overflow of
 // the accumulator value if the destination is not also a 16 bit memory
 // location.
+let mayLoad = 1 in
+def DXCH : ALUWriteInst<0b10101, (outs AL:$a_dst),
+                        (ins mem10:$k_dst, AL:$a, mem10:$k), "dxch">;
+
 let Constraints = "$k = $k_dst" in
-def DXCH : ALUWriteInst<0b10101, (outs AL:$a_dst, GPRD:$k_dst),
-                        (ins AL:$a, GPRD:$k), "dxch">;
+def PseudoDXCH : ALUWritePseudo<(outs AL:$a_dst, GPRD:$k_dst),
+                                (ins AL:$a, GPRD:$k), "dxch">;
 
 //===----------------------------------------------------------------------===//
 // Control flow instructions

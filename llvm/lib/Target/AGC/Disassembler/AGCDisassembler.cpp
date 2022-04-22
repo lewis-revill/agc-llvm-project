@@ -37,13 +37,6 @@ extern "C" void LLVMInitializeAGCDisassembler() {
                                          createAGCDisassembler);
 }
 
-static DecodeStatus decodeMem12Operand(MCInst &Inst, uint64_t Imm,
-                                       int64_t Address, const void *Decoder) {
-  assert(isUInt<12>(Imm) && "Invalid immediate");
-  Inst.addOperand(MCOperand::createImm(Imm));
-  return MCDisassembler::Success;
-}
-
 static DecodeStatus decodeIO9Operand(MCInst &Inst, uint64_t Imm,
                                      int64_t Address, const void *Decoder) {
   assert(isUInt<9>(Imm) && "Invalid immediate");
@@ -84,6 +77,8 @@ static DecodeStatus DecodeGPRRegisterClass(MCInst &Inst, uint64_t RegNo,
                                            int64_t Address,
                                            const void *Decoder) {
   MCRegister Reg = AGC::R0 + RegNo;
+  if (Reg > AGC::R63)
+    return MCDisassembler::Fail;
   Inst.addOperand(MCOperand::createReg(Reg));
   return MCDisassembler::Success;
 }
@@ -92,7 +87,122 @@ static DecodeStatus DecodeGPRDRegisterClass(MCInst &Inst, uint64_t RegNo,
                                             int64_t Address,
                                             const void *Decoder) {
   MCRegister Reg = AGC::RD0 + RegNo;
+  if (Reg > AGC::RD62)
+    return MCDisassembler::Fail;
   Inst.addOperand(MCOperand::createReg(Reg));
+  return MCDisassembler::Success;
+}
+
+static unsigned getEquivalentPseudo(unsigned Opcode) {
+  switch (Opcode) {
+  default:
+    break;
+  case AGC::CA:
+    return AGC::PseudoCA;
+  case AGC::DCA:
+    return AGC::PseudoDCA;
+  case AGC::CS:
+    return AGC::PseudoCS;
+  case AGC::DCS:
+    return AGC::PseudoDCS;
+  case AGC::AD:
+    return AGC::PseudoAD;
+  case AGC::SU:
+    return AGC::PseudoSU;
+  case AGC::DAS:
+    return AGC::PseudoDAS;
+  case AGC::MSU:
+    return AGC::PseudoMSU;
+  case AGC::MASK:
+    return AGC::PseudoMASK;
+  case AGC::MP:
+    return AGC::PseudoMP;
+  case AGC::DV:
+    return AGC::PseudoDV;
+  case AGC::INCR:
+    return AGC::PseudoINCR;
+  case AGC::AUG:
+    return AGC::PseudoAUG;
+  case AGC::ADS:
+    return AGC::PseudoADS;
+  case AGC::DIM:
+    return AGC::PseudoDIM;
+  case AGC::TS:
+    return AGC::PseudoTS;
+  case AGC::XCH:
+    return AGC::PseudoXCH;
+  case AGC::LXCH:
+    return AGC::PseudoLXCH;
+  case AGC::QXCH:
+    return AGC::PseudoQXCH;
+  case AGC::DXCH:
+    return AGC::PseudoDXCH;
+  case AGC::PseudoCA:
+  case AGC::PseudoDCA:
+  case AGC::PseudoCS:
+  case AGC::PseudoDCS:
+  case AGC::PseudoAD:
+  case AGC::PseudoSU:
+  case AGC::PseudoDAS:
+  case AGC::PseudoMSU:
+  case AGC::PseudoMASK:
+  case AGC::PseudoMP:
+  case AGC::PseudoDV:
+  case AGC::PseudoINCR:
+  case AGC::PseudoAUG:
+  case AGC::PseudoADS:
+  case AGC::PseudoDIM:
+  case AGC::PseudoTS:
+  case AGC::PseudoXCH:
+  case AGC::PseudoLXCH:
+  case AGC::PseudoQXCH:
+  case AGC::PseudoDXCH:
+    return Opcode;
+  }
+
+  return (unsigned) -1;
+}
+
+static DecodeStatus decodeAsEquivalentPseudo(MCInst &Inst, uint64_t Imm,
+                                             int64_t Address,
+                                             const void *Decoder) {
+  unsigned PseudoOpc = getEquivalentPseudo(Inst.getOpcode());
+  // Didn't find an equivalent pseudo, carry on with default decoding.
+  if (PseudoOpc == (unsigned) -1)
+    return MCDisassembler::Fail;
+
+  // Find whether we need to decode GPR or GPRD.
+  switch (PseudoOpc) {
+  default:
+    return DecodeGPRRegisterClass(Inst, Imm, Address, Decoder);
+  case AGC::PseudoDCA:
+  case AGC::PseudoDCS:
+  case AGC::PseudoDAS:
+  case AGC::PseudoDV:
+  case AGC::PseudoDXCH:
+    return DecodeGPRDRegisterClass(Inst, Imm, Address, Decoder);
+  }
+}
+
+static DecodeStatus decodeMem12Operand(MCInst &Inst, uint64_t Imm,
+                                       int64_t Address, const void *Decoder) {
+  assert(isUInt<12>(Imm) && "Invalid immediate");
+  if (decodeAsEquivalentPseudo(Inst, Imm, Address, Decoder) !=
+      MCDisassembler::Success)
+    Inst.addOperand(MCOperand::createImm(Imm));
+  else
+    Inst.setOpcode(getEquivalentPseudo(Inst.getOpcode()));
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus decodeMem10Operand(MCInst &Inst, uint64_t Imm,
+                                       int64_t Address, const void *Decoder) {
+  assert(isUInt<10>(Imm) && "Invalid immediate");
+  if (decodeAsEquivalentPseudo(Inst, Imm, Address, Decoder) !=
+      MCDisassembler::Success)
+    Inst.addOperand(MCOperand::createImm(Imm));
+  else
+    Inst.setOpcode(getEquivalentPseudo(Inst.getOpcode()));
   return MCDisassembler::Success;
 }
 

@@ -142,6 +142,10 @@ public:
     return (isConstantImm() && isUInt<12>(getConstantImm())) || isSymbolRef();
   }
 
+  bool isMem10() const {
+    return (isConstantImm() && isUInt<10>(getConstantImm())) || isSymbolRef();
+  }
+
   bool isIO9() const {
     return (isConstantImm() && isUInt<9>(getConstantImm())) || isSymbolRef();
   }
@@ -414,6 +418,11 @@ bool AGCAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     SMLoc ErrorLoc = Operands[ErrorInfo]->getStartLoc();
     return Error(ErrorLoc, "memory address must be an immediate in the range "
                            "[0, 4095] or a symbol");
+  }
+  case Match_InvalidMem10: {
+    SMLoc ErrorLoc = Operands[ErrorInfo]->getStartLoc();
+    return Error(ErrorLoc, "memory address must be an immediate in the range "
+                           "[0, 1023] or a symbol");
   }
   case Match_InvalidIO9: {
     SMLoc ErrorLoc = Operands[ErrorInfo]->getStartLoc();

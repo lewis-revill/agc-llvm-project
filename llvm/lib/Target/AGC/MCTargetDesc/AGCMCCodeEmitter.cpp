@@ -55,6 +55,55 @@ void AGCMCCodeEmitter::emitBitsWithParity(raw_ostream &OS, uint16_t Bits) {
   support::endian::write<uint16_t>(OS, Encoding, support::big);
 }
 
+static unsigned getEquivalentNonPseudo(unsigned Opcode) {
+  switch (Opcode) {
+  default:
+    break;
+  case AGC::PseudoCA:
+    return AGC::CA;
+  case AGC::PseudoDCA:
+    return AGC::DCA;
+  case AGC::PseudoCS:
+    return AGC::CS;
+  case AGC::PseudoDCS:
+    return AGC::DCS;
+  case AGC::PseudoAD:
+    return AGC::AD;
+  case AGC::PseudoSU:
+    return AGC::SU;
+  case AGC::PseudoDAS:
+    return AGC::DAS;
+  case AGC::PseudoMSU:
+    return AGC::MSU;
+  case AGC::PseudoMASK:
+    return AGC::MASK;
+  case AGC::PseudoMP:
+    return AGC::MP;
+  case AGC::PseudoDV:
+    return AGC::DV;
+  case AGC::PseudoINCR:
+    return AGC::INCR;
+  case AGC::PseudoAUG:
+    return AGC::AUG;
+  case AGC::PseudoADS:
+    return AGC::ADS;
+  case AGC::PseudoDIM:
+    return AGC::DIM;
+  case AGC::PseudoTS:
+    return AGC::TS;
+  case AGC::PseudoXCH:
+    return AGC::XCH;
+  case AGC::PseudoLXCH:
+    return AGC::LXCH;
+  case AGC::PseudoQXCH:
+    return AGC::QXCH;
+  case AGC::PseudoDXCH:
+    return AGC::DXCH;
+  }
+
+  return Opcode;
+}
+
 void AGCMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
                                          SmallVectorImpl<MCFixup> &Fixups,
                                          const MCSubtargetInfo &STI) const {
@@ -71,8 +120,10 @@ void AGCMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
   }
 
   // TODO: Handle last-minute pseudo instructions.
+  MCInst TrueMI = MI;
+  TrueMI.setOpcode(getEquivalentNonPseudo(MI.getOpcode()));
 
-  uint16_t Bits = getBinaryCodeForInstr(MI, Fixups, STI);
+  uint16_t Bits = getBinaryCodeForInstr(TrueMI, Fixups, STI);
   emitBitsWithParity(OS, Bits);
   ++MCNumEmitted;
 }
