@@ -6,6 +6,7 @@ add_llvm_component_library(LLVMAGCDesc
   AGCMCTargetDesc.cpp
 
   LINK_COMPONENTS
+  AGCAsmPrinter
   AGCInfo
   MC
   Support
