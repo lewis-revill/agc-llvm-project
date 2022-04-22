@@ -4,6 +4,7 @@ set(LLVM_TARGET_DEFINITIONS AGC.td)
 
 tablegen(LLVM AGCGenAsmMatcher.inc -gen-asm-matcher)
 tablegen(LLVM AGCGenAsmWriter.inc -gen-asm-writer)
+tablegen(LLVM AGCGenDisassemblerTables.inc -gen-disassembler)
 tablegen(LLVM AGCGenInstrInfo.inc -gen-instr-info)
 tablegen(LLVM AGCGenMCCodeEmitter.inc -gen-emitter)
 tablegen(LLVM AGCGenRegisterInfo.inc -gen-register-info)
@@ -26,6 +27,7 @@ add_llvm_target(AGCCodeGen
   )
 
 add_subdirectory(AsmParser)
+add_subdirectory(Disassembler)
 add_subdirectory(InstPrinter)
 add_subdirectory(MCTargetDesc)
 add_subdirectory(TargetInfo)

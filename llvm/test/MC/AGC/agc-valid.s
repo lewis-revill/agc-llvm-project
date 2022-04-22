@@ -1,5 +1,7 @@
 # RUN: llvm-mc -triple agc -show-encoding < %s \
 # RUN:     | FileCheck -check-prefixes=CHECK,CHECK-INST %s
+# RUN: llvm-mc -triple agc -filetype=obj < %s | llvm-objdump -d - \
+# RUN:     | FileCheck -check-prefixes=CHECK-INST %s
 
 # CHECK-INST: index
 # CHECK: encoding: [0xa0,0x64]
@@ -106,7 +108,7 @@ dxch rd50
 # CHECK-INST: tc 0
 # CHECK: encoding: [0x00,0x01]
 tc   0
-# CHECK-INST: tc .lbl
+# CHECK-INST: tc
 # CHECK: encoding: [0x00,0x01]
 tc   .lbl
 # CHECK-INST: tc 4095
@@ -116,7 +118,7 @@ tc 07777
 # CHECK-INST: tcf 0
 # CHECK: encoding: [0x20,0x00]
 tcf  0
-# CHECK-INST: tcf .lbl
+# CHECK-INST: tcf
 # CHECK: encoding: [0x20,0x00]
 tcf  .lbl
 # CHECK-INST: tcf 4095
@@ -129,7 +131,7 @@ tcf  07777
 extend
 bzf  02000
 # CHECK-INST: extend
-# CHECK-INST: bzf .lbl
+# CHECK-INST: bzf
 # CHECK: encoding: [0x00,0x0d,0x28,0x01]
 extend
 bzf  .lbl
@@ -145,7 +147,7 @@ bzf  07777
 extend
 bzmf 02000
 # CHECK-INST: extend
-# CHECK-INST: bzmf .lbl
+# CHECK-INST: bzmf
 # CHECK: encoding: [0x00,0x0d,0xc8,0x00]
 extend
 bzmf .lbl
@@ -161,7 +163,7 @@ bzmf 07777
 extend
 read 0
 # CHECK-INST: extend
-# CHECK-INST: read kc
+# CHECK-INST: read
 # CHECK: encoding: [0x00,0x0d,0x00,0x01]
 extend
 read kc
@@ -177,7 +179,7 @@ read 0777
 extend
 write 0
 # CHECK-INST: extend
-# CHECK-INST: write kc
+# CHECK-INST: write
 # CHECK: encoding: [0x00,0x0d,0x04,0x00]
 extend
 write kc
@@ -193,7 +195,7 @@ write 0777
 extend
 rand 0
 # CHECK-INST: extend
-# CHECK-INST: rand kc
+# CHECK-INST: rand
 # CHECK: encoding: [0x00,0x0d,0x08,0x00]
 extend
 rand kc
@@ -209,7 +211,7 @@ rand 0777
 extend
 wand 0
 # CHECK-INST: extend
-# CHECK-INST: wand kc
+# CHECK-INST: wand
 # CHECK: encoding: [0x00,0x0d,0x0c,0x01]
 extend
 wand kc
@@ -225,7 +227,7 @@ wand 0777
 extend
 ror  0
 # CHECK-INST: extend
-# CHECK-INST: ror kc
+# CHECK-INST: ror
 # CHECK: encoding: [0x00,0x0d,0x10,0x00]
 extend
 ror  kc
@@ -241,7 +243,7 @@ ror  0777
 extend
 wor  0
 # CHECK-INST: extend
-# CHECK-INST: wor kc
+# CHECK-INST: wor
 # CHECK: encoding: [0x00,0x0d,0x14,0x01]
 extend
 wor  kc
@@ -257,7 +259,7 @@ wor  0777
 extend
 rxor 0
 # CHECK-INST: extend
-# CHECK-INST: rxor kc
+# CHECK-INST: rxor
 # CHECK: encoding: [0x00,0x0d,0x18,0x01]
 extend
 rxor kc
