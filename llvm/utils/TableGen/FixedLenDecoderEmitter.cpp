@@ -2120,6 +2120,11 @@ populateInstruction(CodeGenTarget &Target, const Record &EncodingDef,
     if (Base != ~0U)
       OpInfo.addField(Base, Width, Offset);
 
+    // If this is an operand with no encoding but DecodeNullOps is set, let the
+    // target decode a default 0-width operand.
+    if (OpInfo.numFields() == 0 && Def.getValueAsBit("DecodeNullOps"))
+      OpInfo.addField(0, 0, 0);
+
     if (OpInfo.numFields() > 0)
       InsnOperands.push_back(OpInfo);
   }
