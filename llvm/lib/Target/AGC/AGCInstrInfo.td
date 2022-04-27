@@ -13,6 +13,13 @@
 include "AGCInstrFormats.td"
 
 //===----------------------------------------------------------------------===//
+// AGC specific DAG nodes.
+//===----------------------------------------------------------------------===//
+
+def RetFlag : SDNode<"AGCISD::RET_FLAG", SDTNone,
+                     [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+
+//===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions
 //===----------------------------------------------------------------------===//
 
@@ -24,20 +31,20 @@ class AGCAsmOperand<string N> : AsmOperandClass {
 
 // A 12 bit address into general purpose memory, encompassing erasable and
 // read-only memory locations.
-def mem12 : Operand<i16> {
+def mem12 : Operand<i16>, ImmLeaf<i16, [{return isUInt<12>(Imm);}]> {
   let ParserMatchClass = AGCAsmOperand<"Mem12">;
   let DecoderMethod = "decodeMem12Operand";
 }
 
 // A 10 bit address into general purpose memory, encompassing only erasable
 // memory locations.
-def mem10 : Operand<i16> {
+def mem10 : Operand<i16>, ImmLeaf<i16, [{return isUInt<10>(Imm);}]> {
   let ParserMatchClass = AGCAsmOperand<"Mem10">;
   let DecoderMethod = "decodeMem10Operand";
 }
 
 // A 9 bit address into IO channel memory.
-def io9 : Operand<i16> {
+def io9 : Operand<i16>, ImmLeaf<i16, [{return isUInt<9>(Imm);}]> {
   let ParserMatchClass = AGCAsmOperand<"IO9">;
   let DecoderMethod = "decodeIO9Operand";
 }
@@ -457,3 +464,20 @@ def WOR : IOReadWriteInst<0b000101, (outs A:$a_dst, io9:$kc_wb),
 // Xor value of IO channel to accumulator.
 def RXOR : IOReadInst<0b000110, (outs A:$a_dst), (ins A:$a, io9:$kc),
                       "rxor">;
+
+//===----------------------------------------------------------------------===//
+// Pseudo-instructions and codegen patterns
+//===----------------------------------------------------------------------===//
+
+/// Generic pattern classes
+
+class PatAGPR<SDPatternOperator OpNode, AGCInst Inst>
+    : Pat<(OpNode A:$a, GPR:$k), (Inst A:$a, GPR:$k)>;
+
+def : PatAGPR<add, PseudoAD>;
+def : PatAGPR<sub, PseudoSU>;
+def : PatAGPR<and, PseudoMASK>;
+
+let isBarrier = 1, isReturn = 1, isTerminator = 1 in
+def PseudoRET : Pseudo<(outs), (ins), "ret", "", [(RetFlag)]>,
+                PseudoInstExpansion<(TC 2)>;

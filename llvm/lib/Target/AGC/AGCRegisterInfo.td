@@ -271,8 +271,8 @@ def SP : RegisterClass<"AGC", [i16], 16, (add R49)>;
 
 // Define the full set of 'general purpose' registers in a class.
 def GPR : RegisterClass<"AGC", [i16], 16, (add (sequence "R%u", 50, 63),
-                                               (sequence "R%u", 0, 49))>;
+                                               (sequence "R%u", 1, 49))>;
 
 // Define the full set of 'general purpose' double registers in a class.
 def GPRD : RegisterClass<"AGC", [i32], 16, (add (sequence "RD%u", 50, 62),
-                                                (sequence "RD%u", 0, 49))>;
+                                                (sequence "RD%u", 2, 49))>;
