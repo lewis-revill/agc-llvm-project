@@ -26,8 +26,38 @@ void AGCDAGToDAGISel::Select(SDNode *Node) {
     return;
   }
 
+  switch (Node->getOpcode()) {
+  default:
+    break;
+  case ISD::Constant:
+    SelectConstant(Node);
+    return;
+  }
+
   // Select the default instruction.
   SelectCode(Node);
+}
+
+void AGCDAGToDAGISel::SelectConstant(SDNode *Node) {
+  MVT VT = Node->getSimpleValueType(0);
+  SDLoc DL(Node);
+
+  assert(VT == MVT::i16 && "Cannot yet materialize >16-bit constants");
+
+  auto *ConstNode = cast<ConstantSDNode>(Node);
+
+  if (ConstNode->isZero()) {
+    SDValue New =
+        CurDAG->getCopyFromReg(CurDAG->getEntryNode(), DL, AGC::R7, VT);
+    ReplaceNode(Node, New.getNode());
+    return;
+  }
+
+  // Create our own load constant pseudo instruction to expand later.
+  int64_t Imm = ConstNode->getSExtValue();
+  SDNode *LC = CurDAG->getMachineNode(AGC::PseudoLoadConst, DL, VT,
+                                      CurDAG->getTargetConstant(Imm, DL, VT));
+  ReplaceNode(Node, LC);
 }
 
 // This pass converts a legalized DAG into an AGC-specific DAG, ready for

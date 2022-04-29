@@ -14,6 +14,7 @@
 #include "AGCMCCodeEmitter.h"
 #include "AGCMCTargetDesc.h"
 #include "llvm/MC/MCELFObjectWriter.h"
+#include "llvm/MC/MCFixupKindInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
 
 using namespace llvm;
@@ -49,6 +50,29 @@ void AGCAsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
 void AGCAsmBackend::relaxInstruction(MCInst &Inst,
                                      const MCSubtargetInfo &STI) const {
   llvm_unreachable("No relaxation implemented");
+}
+
+const MCFixupKindInfo &AGCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
+  const static MCFixupKindInfo Infos[] = {
+      // This table *must* be in the order that the fixup_* kinds are defined in
+      // AGCFixupKinds.h.
+      //
+      // name             offset bits  flags
+      {"fixup_agc_cpi12", 3,     12,   0},
+  };
+  static_assert((array_lengthof(Infos)) == AGC::NumTargetFixupKinds,
+                "Not all fixup kinds added to Infos array");
+
+  // Fixup kinds from .reloc directive do not require any extra processing.
+  if (Kind >= FirstLiteralRelocationKind)
+    return MCAsmBackend::getFixupKindInfo(FK_NONE);
+
+  if (Kind < FirstTargetFixupKind)
+    return MCAsmBackend::getFixupKindInfo(Kind);
+
+  assert(unsigned(Kind - FirstTargetFixupKind) < getNumFixupKinds() &&
+         "Invalid kind!");
+  return Infos[Kind - FirstTargetFixupKind];
 }
 
 MCAsmBackend *llvm::createAGCAsmBackend(const Target &T,

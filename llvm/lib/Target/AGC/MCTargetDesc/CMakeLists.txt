@@ -3,6 +3,7 @@ add_llvm_component_library(LLVMAGCDesc
   AGCMCAsmInfo.cpp
   AGCMCCodeEmitter.cpp
   AGCMCELFObjectWriter.cpp
+  AGCMCExpr.cpp
   AGCMCTargetDesc.cpp
 
   LINK_COMPONENTS

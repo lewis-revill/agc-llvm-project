@@ -12,14 +12,44 @@
 //===----------------------------------------------------------------------===//
 
 #include "AGC.h"
+#include "MCTargetDesc/AGCBaseInfo.h"
+#include "MCTargetDesc/AGCMCExpr.h"
+#include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
 
+static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
+                                    AsmPrinter &AP) {
+  MCContext &Ctx = AP.OutContext;
+  AGCMCExpr::VariantKind Kind;
+
+  const MCExpr *ME =
+      MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None, Ctx);
+  switch (MO.getTargetFlags()) {
+  default:
+    llvm_unreachable("Unknown target flag on operand");
+  case AGCII::MO_None:
+    Kind = AGCMCExpr::VK_AGC_None;
+    break;
+  case AGCII::MO_CPI:
+    Kind = AGCMCExpr::VK_AGC_CPI;
+    // We actually don't want LLVM to emit/use any 'CPI symbols', but instead we
+    // want to encode the constant in the relocation for the linker to analyse
+    // directly.
+    ME = MCConstantExpr::create(MO.getIndex(), Ctx);
+    break;
+  }
+
+  if (Kind != AGCMCExpr::VK_AGC_None)
+    ME = AGCMCExpr::create(ME, Kind, Ctx);
+  return MCOperand::createExpr(ME);
+}
+
 bool llvm::LowerAGCMachineOperandToMCOperand(const MachineOperand &MO,
-                                             MCOperand &MCOp) {
+                                             MCOperand &MCOp, AsmPrinter &AP) {
   switch (MO.getType()) {
   default:
     report_fatal_error("LowerAGCMachineInstrToMCInst: unknown operand type");
@@ -32,17 +62,21 @@ bool llvm::LowerAGCMachineOperandToMCOperand(const MachineOperand &MO,
   case MachineOperand::MO_Immediate:
     MCOp = MCOperand::createImm(MO.getImm());
     break;
+  case MachineOperand::MO_ConstantPoolIndex:
+    MCOp = lowerSymbolOperand(MO, AP.GetCPISymbol(MO.getIndex()), AP);
+    break;
   }
   return true;
 }
 
-void llvm::LowerAGCMachineInstrToMCInst(const MachineInstr *MI, MCInst &OutMI) {
+void llvm::LowerAGCMachineInstrToMCInst(const MachineInstr *MI, MCInst &OutMI,
+                                        AsmPrinter &AP) {
 
   OutMI.setOpcode(MI->getOpcode());
 
   for (const MachineOperand &MO : MI->operands()) {
     MCOperand MCOp;
-    if (LowerAGCMachineOperandToMCOperand(MO, MCOp))
+    if (LowerAGCMachineOperandToMCOperand(MO, MCOp, AP))
       OutMI.addOperand(MCOp);
   }
 }

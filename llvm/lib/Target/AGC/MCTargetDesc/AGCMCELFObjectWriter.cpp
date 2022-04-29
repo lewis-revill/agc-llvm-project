@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AGCMCELFObjectWriter.h"
+#include "AGCFixupKinds.h"
 #include "AGCMCTargetDesc.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCObjectWriter.h"
@@ -23,6 +24,8 @@ unsigned AGCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
   switch (Fixup.getKind()) {
   default:
     llvm_unreachable("Unimplemented fixup kind!");
+  case AGC::fixup_agc_cpi12:
+    return ELF::R_AGC_CPI12;
   }
 }
 

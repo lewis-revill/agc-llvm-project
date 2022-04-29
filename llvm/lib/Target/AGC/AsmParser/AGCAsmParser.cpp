@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/AGCMCExpr.h"
 #include "MCTargetDesc/AGCMCTargetDesc.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -59,6 +60,7 @@ class AGCAsmParser : public MCTargetAsmParser {
 
   OperandMatchResultTy parseImmediate(OperandVector &Operands);
   OperandMatchResultTy parseRegister(OperandVector &Operands);
+  OperandMatchResultTy parseOperandWithModifier(OperandVector &Operands);
   bool parseOperand(OperandVector &Operands, StringRef Mnemonic);
 
 public:
@@ -138,16 +140,23 @@ public:
     return isImm() && getImm()->getKind() == MCExpr::SymbolRef;
   }
 
+  bool isTargetExpr() const {
+    return isImm() && getImm()->getKind() == MCExpr::Target;
+  }
+
   bool isMem12() const {
-    return (isConstantImm() && isUInt<12>(getConstantImm())) || isSymbolRef();
+    return (isConstantImm() && isUInt<12>(getConstantImm())) || isSymbolRef() ||
+           isTargetExpr();
   }
 
   bool isMem10() const {
-    return (isConstantImm() && isUInt<10>(getConstantImm())) || isSymbolRef();
+    return (isConstantImm() && isUInt<10>(getConstantImm())) || isSymbolRef() ||
+           isTargetExpr();
   }
 
   bool isIO9() const {
-    return (isConstantImm() && isUInt<9>(getConstantImm())) || isSymbolRef();
+    return (isConstantImm() && isUInt<9>(getConstantImm())) || isSymbolRef() ||
+           isTargetExpr();
   }
 
   /// getStartLoc - Gets location of the first token of this operand
@@ -293,6 +302,8 @@ OperandMatchResultTy AGCAsmParser::parseImmediate(OperandVector &Operands) {
   case AsmToken::Integer:
   case AsmToken::Identifier:
     break;
+  case AsmToken::Percent:
+    return parseOperandWithModifier(Operands);
   }
 
   const MCExpr *IdVal;
@@ -305,6 +316,45 @@ OperandMatchResultTy AGCAsmParser::parseImmediate(OperandVector &Operands) {
 
   SMLoc EndLoc = SMLoc::getFromPointer(StartLoc.getPointer() - 1);
   Operands.push_back(AGCOperand::createImm(IdVal, StartLoc, EndLoc));
+  return MatchOperand_Success;
+}
+
+OperandMatchResultTy
+AGCAsmParser::parseOperandWithModifier(OperandVector &Operands) {
+  SMLoc S = getLoc();
+  SMLoc E;
+
+  if (getLexer().getKind() != AsmToken::Percent) {
+    Error(getLoc(), "expected '%' for operand modifier");
+    return MatchOperand_ParseFail;
+  }
+
+  getParser().Lex(); // Eat '%'
+
+  if (getLexer().getKind() != AsmToken::Identifier) {
+    Error(getLoc(), "expected valid identifier for operand modifier");
+    return MatchOperand_ParseFail;
+  }
+  StringRef Identifier = getParser().getTok().getIdentifier();
+  AGCMCExpr::VariantKind VK = AGCMCExpr::getVariantKindForName(Identifier);
+  if (VK == AGCMCExpr::VK_AGC_Invalid) {
+    Error(getLoc(), "unrecognized operand modifier");
+    return MatchOperand_ParseFail;
+  }
+
+  getParser().Lex(); // Eat the identifier
+  if (getLexer().getKind() != AsmToken::LParen) {
+    Error(getLoc(), "expected '('");
+    return MatchOperand_ParseFail;
+  }
+  getParser().Lex(); // Eat '('
+
+  const MCExpr *SubExpr;
+  if (getParser().parseParenExpression(SubExpr, E))
+    return MatchOperand_ParseFail;
+
+  const MCExpr *ModExpr = AGCMCExpr::create(SubExpr, VK, getContext());
+  Operands.push_back(AGCOperand::createImm(ModExpr, S, E));
   return MatchOperand_Success;
 }
 

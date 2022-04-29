@@ -13,6 +13,7 @@
 
 #include "AGC.h"
 #include "AGCInstrInfo.h"
+#include "MCTargetDesc/AGCBaseInfo.h"
 #include "MCTargetDesc/AGCMCTargetDesc.h"
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -49,6 +50,8 @@ private:
                                 MachineBasicBlock::iterator MBBI);
   bool expandPseudoStoreIndirect(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator MBBI);
+  bool expandPseudoLoadConst(MachineBasicBlock &MBB,
+                             MachineBasicBlock::iterator MBBI);
 };
 
 char AGCExpandPseudos::ID = 0;
@@ -115,6 +118,25 @@ bool AGCExpandPseudos::expandPseudoStoreIndirect(
   return true;
 }
 
+bool AGCExpandPseudos::expandPseudoLoadConst(MachineBasicBlock &MBB,
+                                             MachineBasicBlock::iterator MBBI) {
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+
+  Register DstReg = MI.getOperand(0).getReg();
+  uint64_t Imm = MI.getOperand(1).getImm();
+
+  assert(DstReg == AGC::R0 && "Expecting accumulator dest only");
+  assert(isInt<16>(Imm) && "Constant out of range");
+
+  BuildMI(MBB, MI, DL, TII->get(AGC::CA), DstReg)
+      .addConstantPoolIndex(Imm, 0, AGCII::MO_CPI)
+      .addConstantPoolIndex(Imm, 0, AGCII::MO_CPI);
+
+  MI.eraseFromParent();
+  return true;
+}
+
 bool AGCExpandPseudos::expandSimplePseudoInstr(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI) {
   switch (MBBI->getOpcode()) {
@@ -124,6 +146,8 @@ bool AGCExpandPseudos::expandSimplePseudoInstr(
     return expandPseudoLoadIndirect(MBB, MBBI);
   case AGC::PseudoStoreInd:
     return expandPseudoStoreIndirect(MBB, MBBI);
+  case AGC::PseudoLoadConst:
+    return expandPseudoLoadConst(MBB, MBBI);
   }
   return false;
 }

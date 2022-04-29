@@ -11,6 +11,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "AGCMCCodeEmitter.h"
+#include "AGCFixupKinds.h"
+#include "AGCMCExpr.h"
 #include "AGCMCTargetDesc.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/MC/MCExpr.h"
@@ -139,7 +141,30 @@ unsigned AGCMCCodeEmitter::getMachineOpValue(const MCInst &MI,
     return static_cast<unsigned>(MO.getImm());
 
   // TODO: Implement fixups to resolve SymbolRef operands.
-  if (MO.isExpr() && MO.getExpr()->getKind() == MCExpr::SymbolRef)
+  assert(MO.isExpr() && "Expecting expression as machine operand");
+  const MCExpr *Expr = MO.getExpr();
+  MCExpr::ExprKind Kind = Expr->getKind();
+  AGC::Fixups FixupKind = AGC::fixup_agc_invalid;
+  if (Kind == MCExpr::Target) {
+    const AGCMCExpr *TExpr = static_cast<const AGCMCExpr *>(Expr);
+    switch (TExpr->getKind()) {
+    default:
+      break;
+    case AGCMCExpr::VK_AGC_CPI:
+      FixupKind = AGC::fixup_agc_cpi12;
+      break;
+    }
+
+    assert(FixupKind != AGC::fixup_agc_invalid &&
+           "Unhandled target expression!");
+    Fixups.push_back(
+        MCFixup::create(0, Expr, MCFixupKind(FixupKind), MI.getLoc()));
+
+    // Upper bits of the address for branch instructions distinguishes them from
+    // other instructions, so we cannot use 0 here!
+    return (MI.getOpcode() == AGC::BZF || MI.getOpcode() == AGC::BZMF) ? 1024
+                                                                       : 0;
+  } else if (Kind == MCExpr::SymbolRef)
     // Upper bits of the address for branch instructions distinguishes them from
     // other instructions, so we cannot use 0 here!
     return (MI.getOpcode() == AGC::BZF || MI.getOpcode() == AGC::BZMF) ? 1024

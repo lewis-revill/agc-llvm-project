@@ -16,6 +16,7 @@
 
 namespace llvm {
 class AGCTargetMachine;
+class AsmPrinter;
 class FunctionPass;
 class MachineInstr;
 class MachineOperand;
@@ -24,8 +25,9 @@ class MCOperand;
 class PassRegistry;
 
 bool LowerAGCMachineOperandToMCOperand(const MachineOperand &MO,
-                                       MCOperand &MCOp);
-void LowerAGCMachineInstrToMCInst(const MachineInstr *MI, MCInst &OutMI);
+                                       MCOperand &MCOp, AsmPrinter &AP);
+void LowerAGCMachineInstrToMCInst(const MachineInstr *MI, MCInst &OutMI,
+                                  AsmPrinter &AP);
 
 FunctionPass *createAGCISelDag(AGCTargetMachine &TM);
 

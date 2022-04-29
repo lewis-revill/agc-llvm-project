@@ -31,7 +31,7 @@ void AGCAsmPrinter::emitInstruction(const MachineInstr *MI) {
     return;
 
   MCInst TmpInst;
-  LowerAGCMachineInstrToMCInst(MI, TmpInst);
+  LowerAGCMachineInstrToMCInst(MI, TmpInst, *this);
   EmitToStreamer(*OutStreamer, TmpInst);
 }
 

@@ -13,6 +13,7 @@
 #ifndef LLVM_LIB_TARGET_AGC_MCTARGETDESC_AGCASMBACKEND_H
 #define LLVM_LIB_TARGET_AGC_MCTARGETDESC_AGCASMBACKEND_H
 
+#include "AGCFixupKinds.h"
 #include "llvm/MC/MCAsmBackend.h"
 
 namespace llvm {
@@ -32,7 +33,14 @@ public:
   bool writeNopData(raw_ostream &OS, uint64_t Count,
                     const MCSubtargetInfo *STI) const override;
 
-  unsigned getNumFixupKinds() const override { return 1; }
+  unsigned getNumFixupKinds() const override {
+    return AGC::NumTargetFixupKinds;
+  }
+
+  bool shouldForceRelocation(const MCAssembler &Asm, const MCFixup &Fixup,
+                             const MCValue &Target) override {
+    return true;
+  }
 
   void applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
                   const MCValue &Target, MutableArrayRef<char> Data,
@@ -52,6 +60,8 @@ public:
 
   void relaxInstruction(MCInst &Inst,
                         const MCSubtargetInfo &STI) const override;
+
+  const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const override;
 };
 } // namespace llvm
 

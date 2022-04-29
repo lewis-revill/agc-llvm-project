@@ -27,3 +27,23 @@ entry:
   %3 = load i16, i16* %2
   ret i16 %3
 }
+
+define i16 @load_zero() {
+; CHECK-LABEL: load_zero:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    ca zero
+; CHECK-NEXT:    ts r50
+; CHECK-NEXT:    tc 2
+entry:
+  ret i16 0
+}
+
+define i16 @load_const() {
+; CHECK-LABEL: load_const:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    ca %cpi(31)
+; CHECK-NEXT:    ts r50
+; CHECK-NEXT:    tc 2
+entry:
+  ret i16 31
+}

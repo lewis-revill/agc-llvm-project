@@ -495,3 +495,8 @@ def PseudoStoreInd : Pseudo<(outs), (ins A:$a, GPR:$k, mem12:$offs), "st",
 def : Pat<(store A:$a, (add GPR:$k, mem12:$offs)),
           (PseudoStoreInd A:$a, GPR:$k, mem12:$offs)>;
 def : Pat<(store A:$a, GPR:$k), (PseudoStoreInd A:$a, GPR:$k, 0)>;
+
+// We will expand this into a CA with an operand representing the constant pool
+// index for the given constant. The linker can deal with the allocation of
+// memory locations to constants.
+def PseudoLoadConst : Pseudo<(outs A:$a), (ins i16imm:$imm), "lc", "$imm">;
