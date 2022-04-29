@@ -481,3 +481,17 @@ def : PatAGPR<and, PseudoMASK>;
 let isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), "ret", "", [(RetFlag)]>,
                 PseudoInstExpansion<(TC 2)>;
+
+def PseudoLoadInd : Pseudo<(outs A:$a), (ins GPR:$k, mem12:$offs), "ld",
+                            "${offs}(${k})">;
+
+def : Pat<(load (add GPR:$k, mem12:$offs)),
+          (PseudoLoadInd GPR:$k, mem12:$offs)>;
+def : Pat<(load GPR:$k), (PseudoLoadInd GPR:$k, 0)>;
+
+def PseudoStoreInd : Pseudo<(outs), (ins A:$a, GPR:$k, mem12:$offs), "st",
+                            "${offs}(${k})">;
+
+def : Pat<(store A:$a, (add GPR:$k, mem12:$offs)),
+          (PseudoStoreInd A:$a, GPR:$k, mem12:$offs)>;
+def : Pat<(store A:$a, GPR:$k), (PseudoStoreInd A:$a, GPR:$k, 0)>;
