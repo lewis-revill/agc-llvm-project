@@ -159,3 +159,89 @@ void AGCInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
         .addReg(AGC::R0, RegState::Kill)
         .addReg(SrcReg, getKillRegState(KillSrc));
 }
+
+unsigned AGCInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
+                                           int &FrameIndex) const {
+  if (MI.getOpcode() != AGC::PseudoLoadInd)
+    return 0;
+
+  if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
+      MI.getOperand(2).getImm() == 0) {
+    FrameIndex = MI.getOperand(1).getIndex();
+    return MI.getOperand(0).getReg();
+  }
+
+  return 0;
+}
+
+unsigned AGCInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
+                                          int &FrameIndex) const {
+  if (MI.getOpcode() != AGC::PseudoStoreInd)
+    return 0;
+
+  if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
+      MI.getOperand(2).getImm() == 0) {
+    FrameIndex = MI.getOperand(1).getIndex();
+    return MI.getOperand(0).getReg();
+  }
+
+  return 0;
+}
+
+void AGCInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
+                                       MachineBasicBlock::iterator I,
+                                       Register SrcReg, bool IsKill, int FI,
+                                       const TargetRegisterClass *RC,
+                                       const TargetRegisterInfo *TRI) const {
+  DebugLoc DL;
+  if (I != MBB.end())
+    DL = I->getDebugLoc();
+
+  if (RC == &AGC::ARegClass) {
+    // We already have the value in the accumulator so we only need to do the
+    // store.
+    BuildMI(MBB, I, DL, get(AGC::PseudoStoreInd))
+        .addReg(SrcReg, getKillRegState(IsKill))
+        .addFrameIndex(FI)
+        .addImm(0);
+    return;
+  }
+
+  // Copy source into the accumulator.
+  BuildMI(MBB, I, DL, get(TargetOpcode::COPY), AGC::R0)
+      .addReg(SrcReg, getKillRegState(IsKill));
+
+  // Store the value into the stack slot.
+  BuildMI(MBB, I, DL, get(AGC::PseudoStoreInd))
+      .addReg(AGC::R0)
+      .addFrameIndex(FI)
+      .addImm(0);
+}
+
+void AGCInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
+                                        MachineBasicBlock::iterator I,
+                                        Register DstReg, int FI,
+                                        const TargetRegisterClass *RC,
+                                        const TargetRegisterInfo *TRI) const {
+  DebugLoc DL;
+  if (I != MBB.end())
+    DL = I->getDebugLoc();
+
+  if (RC == &AGC::ARegClass) {
+    // We will already place the value in the accumulator so we only need to do
+    // the load.
+    BuildMI(MBB, I, DL, get(AGC::PseudoLoadInd), DstReg)
+        .addFrameIndex(FI)
+        .addImm(0);
+    return;
+  }
+
+  // Load the value into the accumulator.
+  BuildMI(MBB, I, DL, get(AGC::PseudoLoadInd), AGC::R0)
+      .addFrameIndex(FI)
+      .addImm(0);
+
+  // Copy the value back into the destination register.
+  BuildMI(MBB, I, DL, get(TargetOpcode::COPY), DstReg)
+      .addReg(AGC::R0, RegState::Kill);
+}

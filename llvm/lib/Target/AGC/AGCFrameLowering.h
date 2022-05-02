@@ -27,6 +27,9 @@ public:
   void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
 
   bool hasFP(const MachineFunction &MF) const override { return false; }
+
+private:
+  void determineFrameLayout(MachineFunction &MF) const;
 };
 } // namespace llvm
 

@@ -14,6 +14,7 @@
 #include "AGCFrameLowering.h"
 #include "AGCSubtarget.h"
 #include "MCTargetDesc/AGCMCTargetDesc.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 
@@ -46,10 +47,34 @@ BitVector AGCRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 void AGCRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                           int SPAdj, unsigned FIOperandNum,
                                           RegScavenger *RS) const {
-  report_fatal_error("Subroutines not supported yet");
+  assert(SPAdj == 0 && "Unexpected non-zero SPAdj value");
+
+  MachineInstr &MI = *II;
+  const MachineFunction &MF = *MI.getParent()->getParent();
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  const TargetFrameLowering *TFI = getFrameLowering(MF);
+
+  int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
+  Register FrameReg;
+  StackOffset Offset =
+      getFrameLowering(MF)->getFrameIndexReference(MF, FrameIndex, FrameReg);
+  Offset += StackOffset::getFixed(MI.getOperand(FIOperandNum + 1).getImm());
+
+  // TODO: Update this when using a frame pointer as the frame reg. For now we
+  // are referencing the stack pointer so subtract the stack adjustment.
+  assert(!TFI->hasFP(MF));
+  Offset -= StackOffset::getFixed(MFI.getStackSize());
+
+  assert(isInt<12>(Offset.getFixed()) && "Stack offset out of range");
+  assert(!Offset.getScalable() && "Expected fixed offset only");
+
+  MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, /*isDef=*/false);
+  MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset.getFixed());
 }
 
 Register AGCRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   // FIXME: Decide on a frame pointer.
-  return ~0u;
+  const TargetFrameLowering *TFI = getFrameLowering(MF);
+  assert(!TFI->hasFP(MF));
+  return AGC::R49;
 }
