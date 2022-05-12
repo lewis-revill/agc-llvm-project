@@ -26,6 +26,10 @@ unsigned AGCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
     llvm_unreachable("Unimplemented fixup kind!");
   case AGC::fixup_agc_cpi12:
     return ELF::R_AGC_CPI12;
+  case AGC::fixup_agc_banks12:
+    return ELF::R_AGC_BANKS12;
+  case AGC::fixup_agc_lo12:
+    return ELF::R_AGC_LO12;
   }
 }
 

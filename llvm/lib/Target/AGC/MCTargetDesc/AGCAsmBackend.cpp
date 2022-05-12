@@ -57,8 +57,10 @@ const MCFixupKindInfo &AGCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       // This table *must* be in the order that the fixup_* kinds are defined in
       // AGCFixupKinds.h.
       //
-      // name             offset bits  flags
-      {"fixup_agc_cpi12", 3,     12,   0},
+      // name               offset bits  flags
+      {"fixup_agc_cpi12",   3,     12,   0},
+      {"fixup_agc_banks12", 3,     12,   0},
+      {"fixup_agc_lo12",    3,     12,   0},
   };
   static_assert((array_lengthof(Infos)) == AGC::NumTargetFixupKinds,
                 "Not all fixup kinds added to Infos array");

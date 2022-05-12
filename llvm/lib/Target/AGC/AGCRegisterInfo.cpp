@@ -28,6 +28,12 @@ AGCRegisterInfo::AGCRegisterInfo(unsigned HwMode)
     : AGCGenRegisterInfo(AGC::R2, /*DwarfFlavour=*/0, /*EHFlavor=*/0, /*PC=*/0,
                          HwMode) {}
 
+const uint32_t *
+AGCRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
+                                      CallingConv::ID /*CC*/) const {
+  return CSR_RegMask;
+}
+
 const MCPhysReg *
 AGCRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   return CSR_SaveList;
@@ -40,6 +46,12 @@ BitVector AGCRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   // which means they cannot be overwritten/allocated.
   for (unsigned Offs = 0; AGC::R3 + Offs < AGC::R50; ++Offs)
     markSuperRegs(Reserved, AGC::R3 + Offs);
+
+  // We also have to reserve R62 and R63 for the purposes of passing bank
+  // selection bits and addresses to a dispatch function when doing function
+  // calls across banks.
+  markSuperRegs(Reserved, AGC::R62);
+  markSuperRegs(Reserved, AGC::R63);
 
   return Reserved;
 }

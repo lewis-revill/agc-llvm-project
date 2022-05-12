@@ -28,6 +28,10 @@ public:
 
   bool hasFP(const MachineFunction &MF) const override { return false; }
 
+  MachineBasicBlock::iterator
+  eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
+                                MachineBasicBlock::iterator MI) const override;
+
 private:
   void determineFrameLayout(MachineFunction &MF) const;
 };

@@ -16,6 +16,25 @@ include "AGCInstrFormats.td"
 // AGC specific DAG nodes.
 //===----------------------------------------------------------------------===//
 
+// Target-independent type requirements, but with target-specific formats.
+def SDT_CallSeqStart : SDCallSeqStart<[SDTCisVT<0, i16>,
+                                       SDTCisVT<1, i16>]>;
+def SDT_CallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i16>,
+                                     SDTCisVT<1, i16>]>;
+
+
+// Target-dependent type requirements.
+def SDT_AGCCall : SDTypeProfile<0, -1, [SDTCisVT<0, i16>]>;
+
+// Target-independent nodes, but with target-specific formats.
+def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_CallSeqStart,
+                           [SDNPHasChain, SDNPOutGlue]>;
+def callseq_end   : SDNode<"ISD::CALLSEQ_END", SDT_CallSeqEnd,
+                           [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
+
+// Target-dependent nodes.
+def Call : SDNode<"AGCISD::CALL", SDT_AGCCall,
+                  [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def RetFlag : SDNode<"AGCISD::RET_FLAG", SDTNone,
                      [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
@@ -47,6 +66,11 @@ def mem10 : Operand<i16>, ImmLeaf<i16, [{return isUInt<10>(Imm);}]> {
 def io9 : Operand<i16>, ImmLeaf<i16, [{return isUInt<9>(Imm);}]> {
   let ParserMatchClass = AGCAsmOperand<"IO9">;
   let DecoderMethod = "decodeIO9Operand";
+}
+
+// A symbol that cannot be a constant immediate.
+def bare_symbol : Operand<i16> {
+  let ParserMatchClass = AGCAsmOperand<"BareSymbol">;
 }
 
 //===----------------------------------------------------------------------===//
@@ -440,7 +464,7 @@ def BZMF : BranchInst<0b110, (outs), (ins A:$a, mem12:$k), "bzmf">;
 def READ : IOReadInst<0b000000, (outs A:$a_dst), (ins io9:$kc), "read">;
 
 // Write value of accumulator to IO channel.
-def WRITE : IOWriteInst<0b000001, (outs io9:$kc), (ins A:$a), "write">;
+def WRITE : IOWriteInst<0b000001, (outs), (ins A:$a, io9:$kc), "write">;
 
 // And value of IO channel to accumulator.
 def RAND : IOReadInst<0b000010, (outs A:$a_dst), (ins A:$a, io9:$kc),
@@ -448,22 +472,19 @@ def RAND : IOReadInst<0b000010, (outs A:$a_dst), (ins A:$a, io9:$kc),
 
 // And value of IO channel to accumulator and write resulting value back to IO
 // channel.
-let Constraints = "$kc = $kc_wb" in
-def WAND : IOReadWriteInst<0b000011, (outs A:$a_dst, io9:$kc_wb),
-                           (ins A:$a, io9:$kc), "wand">;
+def WAND : IOReadWriteInst<0b000011, (outs A:$a_dst), (ins A:$a, io9:$kc),
+                           "wand">;
 
 // Or value of IO channel to accumulator.
 def ROR : IOReadInst<0b000100, (outs A:$a_dst), (ins A:$a, io9:$kc), "ror">;
 
 // Or value of IO channel to accumulator and write resulting value back to IO
 // channel.
-let Constraints = "$kc = $kc_wb" in
-def WOR : IOReadWriteInst<0b000101, (outs A:$a_dst, io9:$kc_wb),
-                           (ins A:$a, io9:$kc), "wor">;
+def WOR : IOReadWriteInst<0b000101, (outs A:$a_dst), (ins A:$a, io9:$kc),
+                          "wor">;
 
 // Xor value of IO channel to accumulator.
-def RXOR : IOReadInst<0b000110, (outs A:$a_dst), (ins A:$a, io9:$kc),
-                      "rxor">;
+def RXOR : IOReadInst<0b000110, (outs A:$a_dst), (ins A:$a, io9:$kc), "rxor">;
 
 //===----------------------------------------------------------------------===//
 // Pseudo-instructions and codegen patterns
@@ -477,6 +498,20 @@ class PatAGPR<SDPatternOperator OpNode, AGCInst Inst>
 def : PatAGPR<add, PseudoAD>;
 def : PatAGPR<sub, PseudoSU>;
 def : PatAGPR<and, PseudoMASK>;
+
+// Pessimistically assume the stack pointer will be clobbered
+let Defs = [R49], Uses = [R49] in {
+def ADJCALLSTACKUP   : Pseudo<(outs), (ins i16imm:$amt1, i16imm:$amt2), "", "",
+                              [(callseq_start timm:$amt1, timm:$amt2)]>;
+def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i16imm:$amt1, i16imm:$amt2), "", "",
+                              [(callseq_end timm:$amt1, timm:$amt2)]>;
+} // Defs = [R49], Uses = [R49]
+
+let isCall = 1, Defs = [R0, R4] in
+def PseudoCALL : Pseudo<(outs), (ins bare_symbol:$func), "call", "$func">;
+
+def : Pat<(Call tglobaladdr:$func), (PseudoCALL tglobaladdr:$func)>;
+def : Pat<(Call texternalsym:$func), (PseudoCALL texternalsym:$func)>;
 
 let isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), "ret", "", [(RetFlag)]>,

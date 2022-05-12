@@ -46,6 +46,8 @@ private:
   bool expandSimplePseudoInstr(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator MBBI);
 
+  bool expandPseudoCALL(MachineBasicBlock &MBB,
+                        MachineBasicBlock::iterator MBBI);
   bool expandPseudoLoadIndirect(MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator MBBI);
   bool expandPseudoStoreIndirect(MachineBasicBlock &MBB,
@@ -72,6 +74,62 @@ bool AGCExpandPseudos::runOnMachineFunction(MachineFunction &MF) {
   }
 
   return Modified;
+}
+
+bool AGCExpandPseudos::expandPseudoCALL(MachineBasicBlock &MBB,
+                                        MachineBasicBlock::iterator MBBI) {
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+
+  const MachineOperand &Callee = MI.getOperand(0);
+
+  assert(Callee.isGlobal() && "Only global addresses supported so far");
+
+  // If the callee is in a different bank then we must use a dispatch function
+  // to jump between banks and still be able to call the function. Only the
+  // linker can tell if this is needed so in the compiler we must be cautious
+  // and assume it is always needed. With the required linker work we might be
+  // able to relax the sequence.
+
+  // CA %banks(func)
+  // TS R62
+  // CA %lo12(func)
+  // TS R63
+  // TC __dispatch
+
+  // Retrieve the 'bank configuration bits' from a location in memory - this is
+  // filled in by the linker when we know where the function ends up and so know
+  // which bank configuration bits must be used.
+  BuildMI(MBB, MI, DL, TII->get(AGC::CA), AGC::R0)
+      .addGlobalAddress(Callee.getGlobal(), 0, AGCII::MO_BANKS)
+      .addGlobalAddress(Callee.getGlobal(), 0, AGCII::MO_BANKS);
+
+  // Write the bank select bits to the register R62 to pass to the dispatch
+  // function.
+  BuildMI(MBB, MI, DL, TII->get(AGC::PseudoTS), AGC::R0)
+      .addReg(AGC::R62, RegState::Define)
+      .addReg(AGC::R0);
+
+  // Copy the lower 12 bits of the function - this is filled in by the linker
+  // when we know where the function ends up.
+  BuildMI(MBB, MI, DL, TII->get(AGC::CA), AGC::R0)
+      .addGlobalAddress(Callee.getGlobal(), 0, AGCII::MO_LO12)
+      .addGlobalAddress(Callee.getGlobal(), 0, AGCII::MO_LO12);
+
+  // Write the lower 12 bits to the register R63 to pass to the dispatch
+  // function.
+  BuildMI(MBB, MI, DL, TII->get(AGC::PseudoTS), AGC::R0)
+      .addReg(AGC::R63, RegState::Define)
+      .addReg(AGC::R0);
+
+  // Call the dispatch function. We must still add the implicit defs for the
+  // return arguments here to satisfy the verifier.
+  BuildMI(MBB, MI, DL, TII->get(AGC::TC))
+      .addExternalSymbol("__dispatch")
+      .copyImplicitOps(MI);
+
+  MI.eraseFromParent();
+  return true;
 }
 
 bool AGCExpandPseudos::expandPseudoLoadIndirect(
@@ -142,6 +200,8 @@ bool AGCExpandPseudos::expandSimplePseudoInstr(
   switch (MBBI->getOpcode()) {
   default:
     break;
+  case AGC::PseudoCALL:
+    return expandPseudoCALL(MBB, MBBI);
   case AGC::PseudoLoadInd:
     return expandPseudoLoadIndirect(MBB, MBBI);
   case AGC::PseudoStoreInd:

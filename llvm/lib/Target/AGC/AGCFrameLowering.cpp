@@ -132,3 +132,15 @@ void AGCFrameLowering::determineFrameLayout(MachineFunction &MF) const {
   // Update frame info.
   MFI.setStackSize(FrameSize);
 }
+
+// Eliminate ADJCALLSTACKUP, ADJCALLSTACKDOWN pseudo instructions.
+MachineBasicBlock::iterator AGCFrameLowering::eliminateCallFramePseudoInstr(
+    MachineFunction &MF, MachineBasicBlock &MBB,
+    MachineBasicBlock::iterator MI) const {
+
+  if (!hasReservedCallFrame(MF))
+    report_fatal_error(
+        "Stack adjustments outside of prologue/epilogue not yet implemented");
+
+  return MBB.erase(MI);
+}

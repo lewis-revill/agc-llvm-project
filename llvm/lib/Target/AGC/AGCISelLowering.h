@@ -23,6 +23,7 @@ class SelectionDAG;
 namespace AGCISD {
 enum NodeType : unsigned {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
+  CALL,
   RET_FLAG
 };
 }
@@ -42,6 +43,9 @@ public:
 
   const char *getTargetNodeName(unsigned Opcode) const override;
 private:
+
+  SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
+                    SmallVectorImpl<SDValue> &InVals) const override;
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
                                bool IsVarArg,
                                const SmallVectorImpl<ISD::InputArg> &Ins,
@@ -51,6 +55,10 @@ private:
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
                       const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
                       SelectionDAG &DAG) const override;
+
+  bool isEligibleForTailCallOptimization(
+      CCState &CCInfo, CallLoweringInfo &CLI, MachineFunction &MF,
+      const SmallVector<CCValAssign, 16> &ArgLocs) const;
 };
 } // namespace llvm
 

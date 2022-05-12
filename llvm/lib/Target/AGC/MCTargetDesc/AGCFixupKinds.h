@@ -18,6 +18,8 @@ namespace AGC {
 enum Fixups {
   // 12-bit fixup corresponding to %cpi(N) for loading constants.
   fixup_agc_cpi12 = FirstTargetFixupKind,
+  fixup_agc_banks12,
+  fixup_agc_lo12,
 
   // Used as a sentinel, must be the last
   fixup_agc_invalid,

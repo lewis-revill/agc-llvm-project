@@ -20,7 +20,9 @@ namespace AGCII {
 // AGC-specific machine operand flags
 enum {
   MO_None = 0,
-  MO_CPI = 1
+  MO_CPI = 1,
+  MO_BANKS = 2,
+  MO_LO12 = 3
 };
 } // namespace AGCII
 

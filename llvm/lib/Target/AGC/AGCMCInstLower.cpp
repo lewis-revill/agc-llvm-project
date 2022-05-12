@@ -41,6 +41,12 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
     // directly.
     ME = MCConstantExpr::create(MO.getIndex(), Ctx);
     break;
+  case AGCII::MO_BANKS:
+    Kind = AGCMCExpr::VK_AGC_BANKS;
+    break;
+  case AGCII::MO_LO12:
+    Kind = AGCMCExpr::VK_AGC_LO12;
+    break;
   }
 
   if (Kind != AGCMCExpr::VK_AGC_None)
@@ -59,8 +65,18 @@ bool llvm::LowerAGCMachineOperandToMCOperand(const MachineOperand &MO,
       return false;
     MCOp = MCOperand::createReg(MO.getReg());
     break;
+  case MachineOperand::MO_RegisterMask:
+    // Regmasks are like implicit defs.
+    return false;
   case MachineOperand::MO_Immediate:
     MCOp = MCOperand::createImm(MO.getImm());
+    break;
+  case MachineOperand::MO_GlobalAddress:
+    MCOp = lowerSymbolOperand(MO, AP.getSymbolPreferLocal(*MO.getGlobal()), AP);
+    break;
+  case MachineOperand::MO_ExternalSymbol:
+    MCOp = lowerSymbolOperand(
+        MO, AP.GetExternalSymbolSymbol(MO.getSymbolName()), AP);
     break;
   case MachineOperand::MO_ConstantPoolIndex:
     MCOp = lowerSymbolOperand(MO, AP.GetCPISymbol(MO.getIndex()), AP);

@@ -53,6 +53,8 @@ void AGCMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {}
 AGCMCExpr::VariantKind AGCMCExpr::getVariantKindForName(StringRef Name) {
   return StringSwitch<AGCMCExpr::VariantKind>(Name)
       .Case("cpi", VK_AGC_CPI)
+      .Case("banks", VK_AGC_BANKS)
+      .Case("lo12", VK_AGC_LO12)
       .Default(VK_AGC_Invalid);
 }
 
@@ -62,5 +64,9 @@ StringRef AGCMCExpr::getVariantKindName(VariantKind Kind) {
     llvm_unreachable("Invalid ELF symbol kind");
   case VK_AGC_CPI:
     return "cpi";
+  case VK_AGC_BANKS:
+    return "banks";
+  case VK_AGC_LO12:
+    return "lo12";
   }
 }

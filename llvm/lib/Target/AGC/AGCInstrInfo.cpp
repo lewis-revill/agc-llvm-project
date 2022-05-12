@@ -33,7 +33,8 @@ static void getLiveInRegsAt(LivePhysRegs &Regs, const MachineInstr &MI) {
   }
 }
 
-AGCInstrInfo::AGCInstrInfo() : AGCGenInstrInfo() {}
+AGCInstrInfo::AGCInstrInfo()
+    : AGCGenInstrInfo(AGC::ADJCALLSTACKUP, AGC::ADJCALLSTACKDOWN) {}
 
 Optional<DestSourcePair>
 AGCInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {

@@ -25,6 +25,8 @@ public:
   enum VariantKind {
     VK_AGC_None,
     VK_AGC_CPI,
+    VK_AGC_BANKS,
+    VK_AGC_LO12,
     VK_AGC_Invalid,
   };
 

@@ -153,6 +153,12 @@ unsigned AGCMCCodeEmitter::getMachineOpValue(const MCInst &MI,
     case AGCMCExpr::VK_AGC_CPI:
       FixupKind = AGC::fixup_agc_cpi12;
       break;
+    case AGCMCExpr::VK_AGC_BANKS:
+      FixupKind = AGC::fixup_agc_banks12;
+      break;
+    case AGCMCExpr::VK_AGC_LO12:
+      FixupKind = AGC::fixup_agc_lo12;
+      break;
     }
 
     assert(FixupKind != AGC::fixup_agc_invalid &&

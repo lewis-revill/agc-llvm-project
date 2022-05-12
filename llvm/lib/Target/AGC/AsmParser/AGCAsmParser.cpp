@@ -159,6 +159,10 @@ public:
            isTargetExpr();
   }
 
+  bool isBareSymbol() const {
+    return !isConstantImm() && (isSymbolRef() || isTargetExpr());
+  }
+
   /// getStartLoc - Gets location of the first token of this operand
   SMLoc getStartLoc() const override { return StartLoc; }
   /// getEndLoc - Gets location of the last token of this operand
@@ -478,6 +482,11 @@ bool AGCAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     SMLoc ErrorLoc = Operands[ErrorInfo]->getStartLoc();
     return Error(ErrorLoc, "IO channel address must be an immediate in the "
                            "range [0, 511] or a symbol");
+  }
+  case Match_InvalidBareSymbol: {
+    SMLoc ErrorLoc = Operands[ErrorInfo]->getStartLoc();
+    return Error(ErrorLoc, "operand must be a symbol but not a constant "
+                           "immediate");
   }
   }
 }

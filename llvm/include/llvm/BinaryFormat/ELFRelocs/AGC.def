@@ -8,3 +8,7 @@ ELF_RELOC(R_AGC_NONE,        0)
 ELF_RELOC(R_AGC_16,          1)
 // 12-bit constant pool address relocation
 ELF_RELOC(R_AGC_CPI12,       2)
+// 12-bit address of bank select config relocation
+ELF_RELOC(R_AGC_BANKS12,     3)
+// low 12 bits of address relocation
+ELF_RELOC(R_AGC_LO12,       4)
