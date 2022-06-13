@@ -43,6 +43,7 @@ public:
 
   const char *getTargetNodeName(unsigned Opcode) const override;
 private:
+  SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;

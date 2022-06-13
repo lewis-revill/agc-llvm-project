@@ -27,3 +27,38 @@ entry:
   store i16 %val, i16* %2
   ret void
 }
+
+@globl = global i16 0
+
+define void @store_global(i16 %val) {
+; CHECK-LABEL: store_global:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    ca r50
+; CHECK-NEXT:    ts r62
+; CHECK-NEXT:    ca %banks(globl)
+; CHECK-NEXT:    ts fb
+; CHECK-NEXT:    ca r62
+; CHECK-NEXT:    ts %lo12(globl)
+; CHECK-NEXT:    tc 2
+entry:
+  store i16 %val, i16* @globl
+  ret void
+}
+
+define void @store_global_offs(i16 %val) {
+; CHECK-LABEL: store_global_offs:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    ca r50
+; CHECK-NEXT:    ts r62
+; CHECK-NEXT:    ca %banks(globl+2)
+; CHECK-NEXT:    ts fb
+; CHECK-NEXT:    ca r62
+; CHECK-NEXT:    ts %lo12(globl+2)
+; CHECK-NEXT:    tc 2
+entry:
+  %0 = ptrtoint i16* @globl to i16
+  %1 = add i16 %0, 2
+  %2 = inttoptr i16 %1 to i16*
+  store i16 %val, i16* %2
+  ret void
+}

@@ -49,6 +49,10 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
     break;
   }
 
+  if (!MO.isJTI() && !MO.isMBB() && MO.getOffset())
+    ME = MCBinaryExpr::createAdd(
+        ME, MCConstantExpr::create(MO.getOffset(), Ctx), Ctx);
+
   if (Kind != AGCMCExpr::VK_AGC_None)
     ME = AGCMCExpr::create(ME, Kind, Ctx);
   return MCOperand::createExpr(ME);

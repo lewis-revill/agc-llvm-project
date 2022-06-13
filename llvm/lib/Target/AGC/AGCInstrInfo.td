@@ -520,16 +520,31 @@ def PseudoRET : Pseudo<(outs), (ins), "ret", "", [(RetFlag)]>,
 def PseudoLoadInd : Pseudo<(outs A:$a), (ins GPR:$k, mem12:$offs), "ld",
                             "${offs}(${k})">;
 
+def PseudoLoad : Pseudo<(outs A:$a), (ins bare_symbol:$sym, mem12:$offs), "ld",
+                        "${offs}(${sym})">;
+
 def : Pat<(load (add GPR:$k, mem12:$offs)),
           (PseudoLoadInd GPR:$k, mem12:$offs)>;
 def : Pat<(load GPR:$k), (PseudoLoadInd GPR:$k, 0)>;
 
+def : Pat<(load (add tglobaladdr:$sym, mem12:$offs)),
+          (PseudoLoad tglobaladdr:$sym, mem12:$offs)>;
+def : Pat<(load tglobaladdr:$sym), (PseudoLoad tglobaladdr:$sym, 0)>;
+
 def PseudoStoreInd : Pseudo<(outs), (ins A:$a, GPR:$k, mem12:$offs), "st",
                             "${offs}(${k})">;
+
+def PseudoStore : Pseudo<(outs), (ins A:$a, bare_symbol:$sym, mem12:$offs),
+                         "st", "${offs}(${sym})">;
 
 def : Pat<(store A:$a, (add GPR:$k, mem12:$offs)),
           (PseudoStoreInd A:$a, GPR:$k, mem12:$offs)>;
 def : Pat<(store A:$a, GPR:$k), (PseudoStoreInd A:$a, GPR:$k, 0)>;
+
+def : Pat<(store A:$a, (add tglobaladdr:$sym, mem12:$offs)),
+          (PseudoStore A:$a, tglobaladdr:$sym, mem12:$offs)>;
+def : Pat<(store A:$a, tglobaladdr:$sym),
+          (PseudoStore A:$a, tglobaladdr:$sym, 0)>;
 
 // We will expand this into a CA with an operand representing the constant pool
 // index for the given constant. The linker can deal with the allocation of

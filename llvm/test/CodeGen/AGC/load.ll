@@ -47,3 +47,34 @@ define i16 @load_const() {
 entry:
   ret i16 31
 }
+
+@globl = global i16 0
+
+define i16 @load_global() {
+; CHECK-LABEL: load_global:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    ca %banks(globl)
+; CHECK-NEXT:    ts fb
+; CHECK-NEXT:    ca %lo12(globl)
+; CHECK-NEXT:    ts r50
+; CHECK-NEXT:    tc 2
+entry:
+  %0 = load i16, i16* @globl
+  ret i16 %0
+}
+
+define i16 @load_global_offs() {
+; CHECK-LABEL: load_global_offs:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    ca %banks(globl+2)
+; CHECK-NEXT:    ts fb
+; CHECK-NEXT:    ca %lo12(globl+2)
+; CHECK-NEXT:    ts r50
+; CHECK-NEXT:    tc 2
+entry:
+  %0 = ptrtoint i16* @globl to i16
+  %1 = add i16 %0, 2
+  %2 = inttoptr i16 %1 to i16*
+  %3 = load i16, i16* %2
+  ret i16 %3
+}

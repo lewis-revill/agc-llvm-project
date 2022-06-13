@@ -37,6 +37,7 @@ AGCTargetLowering::AGCTargetLowering(const TargetMachine &TM,
   // Compute derived properties from the register classes.
   computeRegisterProperties(STI.getRegisterInfo());
 
+  setOperationAction(ISD::GlobalAddress, MVT::i16, Custom);
   // TODO: Custom lowering required for widening ops.
 }
 
@@ -44,6 +45,8 @@ SDValue AGCTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
   default:
     report_fatal_error("unimplemented operation");
+  case ISD::GlobalAddress:
+    return lowerGlobalAddress(Op, DAG);
   }
 }
 
@@ -57,6 +60,19 @@ void AGCTargetLowering::ReplaceNodeResults(SDNode *N,
       Results.push_back(Res.getValue(I));
     break;
   }
+}
+
+SDValue AGCTargetLowering::lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  EVT Ty = Op.getValueType();
+  GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
+  int64_t Offset = N->getOffset();
+
+  SDValue Addr = DAG.getTargetGlobalAddress(N->getGlobal(), DL, Ty, 0);
+
+  if (Offset != 0)
+    return DAG.getNode(ISD::ADD, DL, Ty, Addr, DAG.getConstant(Offset, DL, MVT::i16));
+  return Addr;
 }
 
 /// isEligibleForTailCallOptimization - Check whether the call is eligible

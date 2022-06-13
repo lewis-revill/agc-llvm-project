@@ -48,6 +48,8 @@ private:
 
   bool expandPseudoCALL(MachineBasicBlock &MBB,
                         MachineBasicBlock::iterator MBBI);
+  bool expandPseudoLoad(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI);
+  bool expandPseudoStore(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI);
   bool expandPseudoLoadIndirect(MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator MBBI);
   bool expandPseudoStoreIndirect(MachineBasicBlock &MBB,
@@ -132,6 +134,101 @@ bool AGCExpandPseudos::expandPseudoCALL(MachineBasicBlock &MBB,
   return true;
 }
 
+bool AGCExpandPseudos::expandPseudoLoad(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI) {
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+
+  Register DstReg = MI.getOperand(0).getReg();
+  const MachineOperand &Addr = MI.getOperand(1);
+  uint64_t Offs = MI.getOperand(2).getImm();
+
+  assert(DstReg == AGC::R0 && "Expecting load to accumulator only");
+  assert(Addr.isGlobal() && "Only global addresses supported for load");
+  assert(isInt<12>(Offs) && "Offset out of range for load");
+
+  // CA %banks(addr)
+  // TS EB
+  // CA %lo12(addr)
+
+  // Retrieve the 'bank configuration bits' from a location in memory - this is
+  // filled in by the linker when we know where the global ends up and so know
+  // which bank configuration bits must be used.
+  BuildMI(MBB, MI, DL, TII->get(AGC::CA), AGC::R0)
+      .addGlobalAddress(Addr.getGlobal(), Offs, AGCII::MO_BANKS)
+      .addGlobalAddress(Addr.getGlobal(), Offs, AGCII::MO_BANKS);
+
+  // Overwrite the erasable bank selection bits with those determined for this
+  // address.
+  BuildMI(MBB, MI, DL, TII->get(AGC::PseudoTS), AGC::R0)
+      .addReg(AGC::R4, RegState::Define)
+      .addReg(AGC::R0);
+
+  // Copy the value at the constructed address into the accumulator.
+  BuildMI(MBB, MI, DL, TII->get(AGC::CA), DstReg)
+      .addGlobalAddress(Addr.getGlobal(), Offs, AGCII::MO_LO12)
+      .addGlobalAddress(Addr.getGlobal(), Offs, AGCII::MO_LO12);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool AGCExpandPseudos::expandPseudoStore(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI) {
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+
+  Register SrcReg = MI.getOperand(0).getReg();
+  const MachineOperand &Addr = MI.getOperand(1);
+  uint64_t Offs = MI.getOperand(2).getImm();
+
+  assert(SrcReg == AGC::R0 && "Expecting store of accumulator only");
+  assert(Addr.isGlobal() && "Only global addresses supported for load");
+  assert(isInt<12>(Offs) && "Offset out of range for store");
+
+  // TS R62
+  // CA %banks(addr)
+  // TS EB
+  // CA R62
+  // TS %lo12(addr)
+
+  // Store the value in another register - we will need to use the accumulator
+  // to setup the bank select bits.
+  //
+  // R62 is a reserved register which we won't need to preserve here so we can
+  // use it for free.
+  BuildMI(MBB, MI, DL, TII->get(AGC::PseudoTS), SrcReg)
+      .addReg(AGC::R62, RegState::Define)
+      .addReg(SrcReg);
+
+  // Retrieve the 'bank configuration bits' from a location in memory - this is
+  // filled in by the linker when we know where the global ends up and so know
+  // which bank configuration bits must be used.
+  BuildMI(MBB, MI, DL, TII->get(AGC::CA), AGC::R0)
+      .addGlobalAddress(Addr.getGlobal(), Offs, AGCII::MO_BANKS)
+      .addGlobalAddress(Addr.getGlobal(), Offs, AGCII::MO_BANKS);
+
+  // Overwrite the erasable bank selection bits with those determined for this
+  // address.
+  BuildMI(MBB, MI, DL, TII->get(AGC::PseudoTS), AGC::R0)
+      .addReg(AGC::R4, RegState::Define)
+      .addReg(AGC::R0);
+
+  // Copy the value to be stored back from R62 before storing it in the
+  // destination address.
+  BuildMI(MBB, MI, DL, TII->get(AGC::PseudoCA), SrcReg)
+      .addReg(AGC::R62, RegState::Define)
+      .addReg(AGC::R62);
+
+  // Store the value to the destination address.
+  BuildMI(MBB, MI, DL, TII->get(AGC::TS), SrcReg)
+      .addGlobalAddress(Addr.getGlobal(), Offs, AGCII::MO_LO12)
+      .addReg(SrcReg);
+
+  MI.eraseFromParent();
+  return true;
+}
+
 bool AGCExpandPseudos::expandPseudoLoadIndirect(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI) {
   MachineInstr &MI = *MBBI;
@@ -202,6 +299,10 @@ bool AGCExpandPseudos::expandSimplePseudoInstr(
     break;
   case AGC::PseudoCALL:
     return expandPseudoCALL(MBB, MBBI);
+  case AGC::PseudoLoad:
+    return expandPseudoLoad(MBB, MBBI);
+  case AGC::PseudoStore:
+    return expandPseudoStore(MBB, MBBI);
   case AGC::PseudoLoadInd:
     return expandPseudoLoadIndirect(MBB, MBBI);
   case AGC::PseudoStoreInd:
