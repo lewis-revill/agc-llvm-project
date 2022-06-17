@@ -12,6 +12,7 @@
 
 #include "AGCInstrInfo.h"
 #include "AGCSubtarget.h"
+#include "MCTargetDesc/AGCBaseInfo.h"
 #include "MCTargetDesc/AGCMCTargetDesc.h"
 #include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -245,4 +246,31 @@ void AGCInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
   // Copy the value back into the destination register.
   BuildMI(MBB, I, DL, get(TargetOpcode::COPY), DstReg)
       .addReg(AGC::R0, RegState::Kill);
+}
+
+// Inserts a branch into the end of the specific MachineBasicBlock, returning
+// the number of instructions inserted.
+unsigned AGCInstrInfo::insertBranch(MachineBasicBlock &MBB,
+                                    MachineBasicBlock *TBB,
+                                    MachineBasicBlock *FBB,
+                                    ArrayRef<MachineOperand> Cond,
+                                    const DebugLoc &DL, int *BytesAdded) const {
+  if (BytesAdded)
+    *BytesAdded = 0;
+
+  // Shouldn't be a fall through.
+  assert(TBB && "insertBranch must not be told to insert a fallthrough");
+  assert((Cond.size() == 2 || Cond.size() == 0) &&
+         "AGC branch conditions have one component!");
+
+  // Unconditional branch.
+  if (Cond.empty()) {
+    MachineInstr &MI =
+        *BuildMI(&MBB, DL, get(AGC::TCF)).addMBB(TBB, AGCII::MO_LO12);
+    if (BytesAdded)
+      *BytesAdded += getInstSizeInBytes(MI);
+    return 1;
+  }
+
+  report_fatal_error("Unimplemented branch type");
 }

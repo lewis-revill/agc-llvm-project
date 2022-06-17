@@ -517,6 +517,11 @@ let isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), "ret", "", [(RetFlag)]>,
                 PseudoInstExpansion<(TC 2)>;
 
+// Pseudo instruction for a branch if not equal to zero. We don't have anything
+// capable of doing this so it must be expanded manually.
+let isBranch = 1, isTerminator = 1 in
+def PseudoBNZF : Pseudo<(outs), (ins A:$a, mem12:$k), "bnzf", "$k">;
+
 def PseudoLoadInd : Pseudo<(outs A:$a), (ins GPR:$k, mem12:$offs), "ld",
                             "${offs}(${k})">;
 

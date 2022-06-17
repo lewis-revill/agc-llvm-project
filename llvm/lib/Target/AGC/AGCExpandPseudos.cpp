@@ -16,6 +16,7 @@
 #include "MCTargetDesc/AGCBaseInfo.h"
 #include "MCTargetDesc/AGCMCTargetDesc.h"
 
+#include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
@@ -44,10 +45,14 @@ public:
 
 private:
   bool expandSimplePseudoInstr(MachineBasicBlock &MBB,
-                               MachineBasicBlock::iterator MBBI);
+                               MachineBasicBlock::iterator MBBI,
+                               MachineBasicBlock::iterator &NextMBBI);
 
   bool expandPseudoCALL(MachineBasicBlock &MBB,
                         MachineBasicBlock::iterator MBBI);
+  bool expandPseudoBNZF(MachineBasicBlock &MBB,
+                        MachineBasicBlock::iterator MBBI,
+                        MachineBasicBlock::iterator &NextMBBI);
   bool expandPseudoLoad(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI);
   bool expandPseudoStore(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI);
   bool expandPseudoLoadIndirect(MachineBasicBlock &MBB,
@@ -70,7 +75,7 @@ bool AGCExpandPseudos::runOnMachineFunction(MachineFunction &MF) {
     auto MBBI = MBB.begin(), MBBE = MBB.end();
     while (MBBI != MBBE) {
       auto NextMBBI = std::next(MBBI);
-      Modified |= expandSimplePseudoInstr(MBB, MBBI);
+      Modified |= expandSimplePseudoInstr(MBB, MBBI, NextMBBI);
       MBBI = NextMBBI;
     }
   }
@@ -130,6 +135,63 @@ bool AGCExpandPseudos::expandPseudoCALL(MachineBasicBlock &MBB,
       .addExternalSymbol("__dispatch")
       .copyImplicitOps(MI);
 
+  MI.eraseFromParent();
+  return true;
+}
+
+bool AGCExpandPseudos::expandPseudoBNZF(MachineBasicBlock &MBB,
+                                        MachineBasicBlock::iterator MBBI,
+                                        MachineBasicBlock::iterator &NextMBBI) {
+  MachineFunction *MF = MBB.getParent();
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+
+  Register CmpReg = MI.getOperand(0).getReg();
+  const MachineOperand &Dest = MI.getOperand(1);
+
+  assert(CmpReg == AGC::R0 && "Expecting comparison of accumulator only");
+  assert(Dest.isMBB() && "Only basic block targets supported for branch");
+
+  // We have no 'branch if not equal (to zero) instruction, so we must invert
+  // the branch logic. IE:
+  //
+  //   PseudoBNZF a, %lo12(.true_block)
+  //   ...
+  //
+  // becomes:
+  //
+  //   BZF a, %lo12(.false_block)
+  //   TCF %lo12(.true_block)
+  // .false_block:
+  //   ...
+
+  // Insert a new basic block for the false case.
+  MachineBasicBlock *FalseMBB =
+      MF->CreateMachineBasicBlock(MBB.getBasicBlock());
+  FalseMBB->setLabelMustBeEmitted();
+  MF->insert(++MBB.getIterator(), FalseMBB);
+
+  // Branch to the false block if the value is equal to zero.
+  BuildMI(MBB, MI, DL, TII->get(AGC::BZF))
+      .addReg(CmpReg)
+      .addMBB(FalseMBB, AGCII::MO_LO12);
+
+  // Unconditionally branch to the true block if that branch wasn't taken.
+  MachineBasicBlock *DestMBB = Dest.getMBB();
+  BuildMI(MBB, MI, DL, TII->get(AGC::TCF)).addMBB(DestMBB, AGCII::MO_LO12);
+
+  // Move all the rest of the instructions to FalseMBB.
+  FalseMBB->splice(FalseMBB->end(), &MBB, std::next(MBBI), MBB.end());
+  // Update machine-CFG edges.
+  FalseMBB->transferSuccessorsAndUpdatePHIs(&MBB);
+  // Make the original basic block fall-through to the new.
+  MBB.addSuccessor(FalseMBB);
+
+  // Make sure live-ins are correctly attached to this new basic block.
+  LivePhysRegs LiveRegs;
+  computeAndAddLiveIns(LiveRegs, *FalseMBB);
+
+  NextMBBI = MBB.end();
   MI.eraseFromParent();
   return true;
 }
@@ -293,12 +355,15 @@ bool AGCExpandPseudos::expandPseudoLoadConst(MachineBasicBlock &MBB,
 }
 
 bool AGCExpandPseudos::expandSimplePseudoInstr(
-    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI) {
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+    MachineBasicBlock::iterator &NextMBBI) {
   switch (MBBI->getOpcode()) {
   default:
     break;
   case AGC::PseudoCALL:
     return expandPseudoCALL(MBB, MBBI);
+  case AGC::PseudoBNZF:
+    return expandPseudoBNZF(MBB, MBBI, NextMBBI);
   case AGC::PseudoLoad:
     return expandPseudoLoad(MBB, MBBI);
   case AGC::PseudoStore:

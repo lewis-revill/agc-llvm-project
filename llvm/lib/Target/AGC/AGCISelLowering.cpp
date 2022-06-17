@@ -38,6 +38,9 @@ AGCTargetLowering::AGCTargetLowering(const TargetMachine &TM,
   computeRegisterProperties(STI.getRegisterInfo());
 
   setOperationAction(ISD::GlobalAddress, MVT::i16, Custom);
+
+  setOperationAction(ISD::BR_CC, MVT::i16, Expand);
+  setOperationAction(ISD::BRCOND, MVT::Other, Custom);
   // TODO: Custom lowering required for widening ops.
 }
 
@@ -47,6 +50,8 @@ SDValue AGCTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     report_fatal_error("unimplemented operation");
   case ISD::GlobalAddress:
     return lowerGlobalAddress(Op, DAG);
+  case ISD::BRCOND:
+    return lowerBRCOND(Op, DAG);
   }
 }
 
@@ -73,6 +78,61 @@ SDValue AGCTargetLowering::lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) con
   if (Offset != 0)
     return DAG.getNode(ISD::ADD, DL, Ty, Addr, DAG.getConstant(Offset, DL, MVT::i16));
   return Addr;
+}
+
+static void translateSetCCForBranch(const SDLoc &DL, SDValue &LHS, SDValue &RHS,
+                                    ISD::CondCode &CCVal, SelectionDAG &DAG) {
+  EVT Ty = LHS.getValueType();
+  switch (CCVal) {
+  default:
+    break;
+  case ISD::SETGT:
+  case ISD::SETGE:
+  case ISD::SETUGT:
+  case ISD::SETUGE:
+    CCVal = ISD::getSetCCSwappedOperands(CCVal);
+    std::swap(LHS, RHS);
+    break;
+  }
+
+  switch (CCVal) {
+  default:
+    break;
+  case ISD::SETLT:
+  case ISD::SETULT:
+    CCVal = CCVal == ISD::SETLT ? ISD::SETLE : ISD::SETULE;
+    LHS = DAG.getNode(ISD::ADD, DL, Ty, LHS, DAG.getConstant(1, DL, Ty));
+    break;
+  }
+
+  // We are going to be comparing against zero no matter what so perform the
+  // subtraction here to simplify later parts.
+  LHS = DAG.getNode(ISD::SUB, DL, Ty, LHS, RHS);
+}
+
+SDValue AGCTargetLowering::lowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+
+  SDValue CondV = Op.getOperand(1);
+
+  if (CondV.getOpcode() == ISD::SETCC &&
+      CondV.getOperand(0).getValueType() == MVT::i16) {
+
+    SDValue LHS = CondV.getOperand(0);
+    SDValue RHS = CondV.getOperand(1);
+
+    ISD::CondCode CCVal = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
+
+    translateSetCCForBranch(DL, LHS, RHS, CCVal, DAG);
+
+    SDValue TargetCC = DAG.getCondCode(CCVal);
+    return DAG.getNode(AGCISD::BR_CC_ZERO, DL, Op.getValueType(),
+                       Op.getOperand(0), LHS, TargetCC, Op.getOperand(2));
+  }
+
+  return DAG.getNode(AGCISD::BR_CC_ZERO, DL, Op.getValueType(),
+                     Op.getOperand(0), CondV, DAG.getCondCode(ISD::SETNE),
+                     Op.getOperand(2));
 }
 
 /// isEligibleForTailCallOptimization - Check whether the call is eligible
@@ -317,6 +377,8 @@ const char *AGCTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "AGCISD::RET_FLAG";
   case AGCISD::CALL:
     return "AGCISD::CALL";
+  case AGCISD::BR_CC_ZERO:
+    return "AGCISD::BR_CC_ZERO";
   }
   return nullptr;
 }

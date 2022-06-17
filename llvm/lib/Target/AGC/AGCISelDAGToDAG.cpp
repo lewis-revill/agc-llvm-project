@@ -32,6 +32,12 @@ void AGCDAGToDAGISel::Select(SDNode *Node) {
   case ISD::Constant:
     SelectConstant(Node);
     return;
+  case ISD::BR:
+    SelectBR(Node);
+    return;
+  case AGCISD::BR_CC_ZERO:
+    SelectBR_CC_ZERO(Node);
+    return;
   }
 
   // Select the default instruction.
@@ -58,6 +64,42 @@ void AGCDAGToDAGISel::SelectConstant(SDNode *Node) {
   SDNode *LC = CurDAG->getMachineNode(AGC::PseudoLoadConst, DL, VT,
                                       CurDAG->getTargetConstant(Imm, DL, VT));
   ReplaceNode(Node, LC);
+}
+
+void AGCDAGToDAGISel::SelectBR(SDNode *Node) {
+  SDLoc DL(Node);
+  ReplaceNode(Node,
+              CurDAG->getMachineNode(AGC::TCF, DL, MVT::Other,
+                                     Node->getOperand(1), Node->getOperand(0)));
+}
+
+void AGCDAGToDAGISel::SelectBR_CC_ZERO(SDNode *Node) {
+  SDLoc DL(Node);
+
+  ISD::CondCode CC =
+      static_cast<const CondCodeSDNode *>(Node->getOperand(2).getNode())->get();
+  SDValue CmpVal = Node->getOperand(1);
+
+  SDNode *Branch;
+  switch (CC) {
+  default:
+    llvm_unreachable("illegal br_cc_zero condition");
+  case ISD::SETLE:
+  case ISD::SETULE:
+    Branch = CurDAG->getMachineNode(AGC::BZMF, DL, MVT::Other, CmpVal,
+                                    Node->getOperand(3), Node->getOperand(0));
+    break;
+  case ISD::SETEQ:
+    Branch = CurDAG->getMachineNode(AGC::BZF, DL, MVT::Other, CmpVal,
+                                    Node->getOperand(3), Node->getOperand(0));
+    break;
+  case ISD::SETNE:
+    Branch = CurDAG->getMachineNode(AGC::PseudoBNZF, DL, MVT::Other, CmpVal,
+                                    Node->getOperand(3), Node->getOperand(0));
+    break;
+  }
+
+  ReplaceNode(Node, Branch);
 }
 
 // This pass converts a legalized DAG into an AGC-specific DAG, ready for

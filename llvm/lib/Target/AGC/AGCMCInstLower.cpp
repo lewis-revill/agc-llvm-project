@@ -49,6 +49,12 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
     break;
   }
 
+  // A basic block can't be constructed with target flags from SelectionDAG but
+  // we know it will always be used as a branch target so needs the LO12 kind.
+  // FIXME: This feels like a hack.
+  if (MO.isMBB())
+    Kind = AGCMCExpr::VK_AGC_LO12;
+
   if (!MO.isJTI() && !MO.isMBB() && MO.getOffset())
     ME = MCBinaryExpr::createAdd(
         ME, MCConstantExpr::create(MO.getOffset(), Ctx), Ctx);
@@ -74,6 +80,9 @@ bool llvm::LowerAGCMachineOperandToMCOperand(const MachineOperand &MO,
     return false;
   case MachineOperand::MO_Immediate:
     MCOp = MCOperand::createImm(MO.getImm());
+    break;
+  case MachineOperand::MO_MachineBasicBlock:
+    MCOp = lowerSymbolOperand(MO, MO.getMBB()->getSymbol(), AP);
     break;
   case MachineOperand::MO_GlobalAddress:
     MCOp = lowerSymbolOperand(MO, AP.getSymbolPreferLocal(*MO.getGlobal()), AP);

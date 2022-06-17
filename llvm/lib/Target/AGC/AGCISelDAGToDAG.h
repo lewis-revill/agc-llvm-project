@@ -29,6 +29,8 @@ public:
   void Select(SDNode *Node) override;
 
   void SelectConstant(SDNode *Node);
+  void SelectBR(SDNode *Node);
+  void SelectBR_CC_ZERO(SDNode *Node);
 
 #include "AGCGenDAGISel.inc"
 };

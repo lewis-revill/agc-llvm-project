@@ -145,8 +145,13 @@ public:
   }
 
   bool isMem12() const {
-    return (isConstantImm() && isUInt<12>(getConstantImm())) || isSymbolRef() ||
-           isTargetExpr();
+    if (isConstantImm())
+      return isUInt<12>(getConstantImm());
+    if (!isTargetExpr())
+      return false;
+
+    const auto *AE = dyn_cast<AGCMCExpr>(getImm());
+    return AE && AE->getKind() == AGCMCExpr::VK_AGC_LO12;
   }
 
   bool isMem10() const {
