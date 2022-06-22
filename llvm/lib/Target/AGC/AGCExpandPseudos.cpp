@@ -142,57 +142,30 @@ bool AGCExpandPseudos::expandPseudoCALL(MachineBasicBlock &MBB,
 bool AGCExpandPseudos::expandPseudoBNZF(MachineBasicBlock &MBB,
                                         MachineBasicBlock::iterator MBBI,
                                         MachineBasicBlock::iterator &NextMBBI) {
-  MachineFunction *MF = MBB.getParent();
   MachineInstr &MI = *MBBI;
   DebugLoc DL = MI.getDebugLoc();
 
-  Register CmpReg = MI.getOperand(0).getReg();
-  const MachineOperand &Dest = MI.getOperand(1);
-
-  assert(CmpReg == AGC::R0 && "Expecting comparison of accumulator only");
-  assert(Dest.isMBB() && "Only basic block targets supported for branch");
-
-  // We have no 'branch if not equal (to zero) instruction, so we must invert
-  // the branch logic. IE:
+  // We just need to invert the true and false blocks, and then use a branch if
+  // zero instead of a branch if not equal to zero. We can easily do this via
+  // the branch analysis interface.
   //
-  //   PseudoBNZF a, %lo12(.true_block)
-  //   ...
-  //
-  // becomes:
-  //
-  //   BZF a, %lo12(.false_block)
-  //   TCF %lo12(.true_block)
-  // .false_block:
-  //   ...
+  // TODO: Should this be done earlier in order to allow more branch passes to
+  // be run on this inverted branch setup?
 
-  // Insert a new basic block for the false case.
-  MachineBasicBlock *FalseMBB =
-      MF->CreateMachineBasicBlock(MBB.getBasicBlock());
-  FalseMBB->setLabelMustBeEmitted();
-  MF->insert(++MBB.getIterator(), FalseMBB);
+  MachineBasicBlock *TBB = nullptr;
+  MachineBasicBlock *FBB = nullptr;
+  SmallVector<MachineOperand, 2> Cond;
 
-  // Branch to the false block if the value is equal to zero.
-  BuildMI(MBB, MI, DL, TII->get(AGC::BZF))
-      .addReg(CmpReg)
-      .addMBB(FalseMBB, AGCII::MO_LO12);
+  bool Analyzed = !TII->analyzeBranch(MBB, TBB, FBB, Cond);
+  assert(Analyzed && "Should have been able to analyze the branch");
 
-  // Unconditionally branch to the true block if that branch wasn't taken.
-  MachineBasicBlock *DestMBB = Dest.getMBB();
-  BuildMI(MBB, MI, DL, TII->get(AGC::TCF)).addMBB(DestMBB, AGCII::MO_LO12);
+  TII->removeBranch(MBB);
 
-  // Move all the rest of the instructions to FalseMBB.
-  FalseMBB->splice(FalseMBB->end(), &MBB, std::next(MBBI), MBB.end());
-  // Update machine-CFG edges.
-  FalseMBB->transferSuccessorsAndUpdatePHIs(&MBB);
-  // Make the original basic block fall-through to the new.
-  MBB.addSuccessor(FalseMBB);
-
-  // Make sure live-ins are correctly attached to this new basic block.
-  LivePhysRegs LiveRegs;
-  computeAndAddLiveIns(LiveRegs, *FalseMBB);
+  // Insert the inverted version of the branch.
+  Cond[0] = MachineOperand::CreateImm(AGC::BZF);
+  TII->insertBranch(MBB, FBB, TBB, Cond, DL);
 
   NextMBBI = MBB.end();
-  MI.eraseFromParent();
   return true;
 }
 

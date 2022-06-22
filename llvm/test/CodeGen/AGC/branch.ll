@@ -37,12 +37,9 @@ define i16 @test_ne(i16 %a, i16 %b) {
 ; CHECK-NEXT:    extend
 ; CHECK-NEXT:    su r51
 ; CHECK-NEXT:    extend
-; CHECK-NEXT:    bzf %lo12(.LBB1_3)
+; CHECK-NEXT:    bzf %lo12(.LBB1_1)
 ; CHECK-NEXT:    tcf %lo12(.LBB1_2)
-; CHECK-NEXT:  .LBB1_3: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    tcf %lo12(.LBB1_1)
-; CHECK-NEXT:  # %bb.2: # %true
+; CHECK-NEXT:  .LBB1_2: # %true
 ; CHECK-NEXT:    ca zero
 ; CHECK-NEXT:    ts r50
 ; CHECK-NEXT:    tc 2
@@ -76,21 +73,20 @@ define i16 @test_lt(i16 %a, i16 %b) {
 ; CHECK-NEXT:    ca 0
 ; CHECK-NEXT:    ad r50
 ; CHECK-NEXT:    extend
-; CHECK-NEXT:    bzmf %lo12(.LBB2_2)
-; CHECK-NEXT:    tcf %lo12(.LBB2_1)
-; CHECK-NEXT:  .LBB2_2: # %true
+; CHECK-NEXT:    bzmf %lo12(.LBB2_1)
+; CHECK-NEXT:    tcf %lo12(.LBB2_2)
+; CHECK-NEXT:  .LBB2_1: # %true
 ; CHECK-NEXT:    ca zero
-; CHECK-NEXT:    ts r50
+; CHECK-NEXT:    tcf %lo12(.LBB2_3)
+; CHECK-NEXT:  .LBB2_2: # %false
+; CHECK-NEXT:    ca %cpi(1)
 ; CHECK-NEXT:  .LBB2_3: # %true
+; CHECK-NEXT:    ts r50
 ; CHECK-NEXT:    ca %cpi(2)
 ; CHECK-NEXT:    extend
 ; CHECK-NEXT:    su sp
 ; CHECK-NEXT:    ts sp
 ; CHECK-NEXT:    tc 2
-; CHECK-NEXT:  .LBB2_1: # %false
-; CHECK-NEXT:    ca %cpi(1)
-; CHECK-NEXT:    ts r50
-; CHECK-NEXT:    tcf %lo12(.LBB2_3)
 entry:
   %tst = icmp slt i16 %a, %b
   br i1 %tst, label %true, label %false
@@ -143,21 +139,20 @@ define i16 @test_gt(i16 %a, i16 %b) {
 ; CHECK-NEXT:    ca 0
 ; CHECK-NEXT:    ad r50
 ; CHECK-NEXT:    extend
-; CHECK-NEXT:    bzmf %lo12(.LBB4_2)
-; CHECK-NEXT:    tcf %lo12(.LBB4_1)
-; CHECK-NEXT:  .LBB4_2: # %true
+; CHECK-NEXT:    bzmf %lo12(.LBB4_1)
+; CHECK-NEXT:    tcf %lo12(.LBB4_2)
+; CHECK-NEXT:  .LBB4_1: # %true
 ; CHECK-NEXT:    ca zero
-; CHECK-NEXT:    ts r50
+; CHECK-NEXT:    tcf %lo12(.LBB4_3)
+; CHECK-NEXT:  .LBB4_2: # %false
+; CHECK-NEXT:    ca %cpi(1)
 ; CHECK-NEXT:  .LBB4_3: # %true
+; CHECK-NEXT:    ts r50
 ; CHECK-NEXT:    ca %cpi(2)
 ; CHECK-NEXT:    extend
 ; CHECK-NEXT:    su sp
 ; CHECK-NEXT:    ts sp
 ; CHECK-NEXT:    tc 2
-; CHECK-NEXT:  .LBB4_1: # %false
-; CHECK-NEXT:    ca %cpi(1)
-; CHECK-NEXT:    ts r50
-; CHECK-NEXT:    tcf %lo12(.LBB4_3)
 entry:
   %tst = icmp sgt i16 %a, %b
   br i1 %tst, label %true, label %false

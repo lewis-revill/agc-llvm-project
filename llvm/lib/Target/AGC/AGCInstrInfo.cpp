@@ -248,6 +248,113 @@ void AGCInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
       .addReg(AGC::R0, RegState::Kill);
 }
 
+bool AGCInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
+                                 MachineBasicBlock *&TBB,
+                                 MachineBasicBlock *&FBB,
+                                 SmallVectorImpl<MachineOperand> &Cond,
+                                 bool AllowModify) const {
+  TBB = FBB = nullptr;
+  Cond.clear();
+
+  // If the block has no terminators, it just falls into the block after it.
+  MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
+  if (I == MBB.end() || !isUnpredicatedTerminator(*I))
+    return false;
+
+  // Count the number of terminators and find the first unconditional or
+  // indirect branch.
+  MachineBasicBlock::iterator FirstUncondOrIndirectBr = MBB.end();
+  int NumTerminators = 0;
+  for (auto J = I.getReverse(); J != MBB.rend() && isUnpredicatedTerminator(*J);
+       J++) {
+    NumTerminators++;
+    if (J->getDesc().isUnconditionalBranch() ||
+        J->getDesc().isIndirectBranch()) {
+      FirstUncondOrIndirectBr = J.getReverse();
+    }
+  }
+
+  // If AllowModify is true, we can erase any terminators after
+  // FirstUncondOrIndirectBR.
+  if (AllowModify && FirstUncondOrIndirectBr != MBB.end()) {
+    while (std::next(FirstUncondOrIndirectBr) != MBB.end()) {
+      std::next(FirstUncondOrIndirectBr)->eraseFromParent();
+      NumTerminators--;
+    }
+    I = FirstUncondOrIndirectBr;
+  }
+
+  // We can't handle blocks that end in an indirect branch.
+  if (I->getDesc().isIndirectBranch())
+    return true;
+
+  // We can't handle blocks with more than 2 terminators.
+  if (NumTerminators > 2)
+    return true;
+
+  // Handle a single unconditional branch.
+  if (NumTerminators == 1 && I->getDesc().isUnconditionalBranch()) {
+    TBB = I->getOperand(0).getMBB();
+    return false;
+  }
+
+  // Handle a single conditional branch.
+  if (NumTerminators == 1 && I->getDesc().isConditionalBranch()) {
+    TBB = I->getOperand(1).getMBB();
+    Cond.push_back(MachineOperand::CreateImm(I->getOpcode()));
+    Cond.push_back(MachineOperand::CreateReg(AGC::R0, /*IsDef=*/false));
+    return false;
+  }
+
+  // Handle a conditional branch followed by an unconditional branch.
+  if (NumTerminators == 2 && std::prev(I)->getDesc().isConditionalBranch() &&
+      I->getDesc().isUnconditionalBranch()) {
+    TBB = std::prev(I)->getOperand(1).getMBB();
+    Cond.push_back(MachineOperand::CreateImm(std::prev(I)->getOpcode()));
+    Cond.push_back(MachineOperand::CreateReg(AGC::R0, /*IsDef=*/false));
+    FBB = I->getOperand(0).getMBB();
+    return false;
+  }
+
+  // Otherwise, we can't handle this.
+  return true;
+}
+
+unsigned AGCInstrInfo::removeBranch(MachineBasicBlock &MBB,
+                                    int *BytesRemoved) const {
+  if (BytesRemoved)
+    *BytesRemoved = 0;
+
+  MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
+  if (I == MBB.end())
+    return 0;
+
+  if (!I->getDesc().isUnconditionalBranch() &&
+      !I->getDesc().isConditionalBranch())
+    return 0;
+
+  // Remove the branch.
+  if (BytesRemoved)
+    *BytesRemoved += getInstSizeInBytes(*I);
+
+  I->eraseFromParent();
+
+  I = MBB.end();
+
+  if (I == MBB.begin())
+    return 1;
+  --I;
+  if (!I->getDesc().isConditionalBranch())
+    return 1;
+
+  // Remove the branch.
+  if (BytesRemoved)
+    *BytesRemoved += getInstSizeInBytes(*I);
+
+  I->eraseFromParent();
+  return 2;
+}
+
 // Inserts a branch into the end of the specific MachineBasicBlock, returning
 // the number of instructions inserted.
 unsigned AGCInstrInfo::insertBranch(MachineBasicBlock &MBB,
@@ -272,5 +379,20 @@ unsigned AGCInstrInfo::insertBranch(MachineBasicBlock &MBB,
     return 1;
   }
 
-  report_fatal_error("Unimplemented branch type");
+  // Either a one or two-way conditional branch.
+  MachineInstr &CondMI = *BuildMI(&MBB, DL, get(Cond[0].getImm()))
+                              .addReg(Cond[1].getReg())
+                              .addMBB(TBB);
+  if (BytesAdded)
+    *BytesAdded += getInstSizeInBytes(CondMI);
+
+  // One-way conditional branch.
+  if (!FBB)
+    return 1;
+
+  // Two-way conditional branch.
+  MachineInstr &MI = *BuildMI(&MBB, DL, get(AGC::TCF)).addMBB(FBB);
+  if (BytesAdded)
+    *BytesAdded += getInstSizeInBytes(MI);
+  return 2;
 }
